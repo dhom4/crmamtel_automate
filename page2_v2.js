@@ -330,54 +330,61 @@ function Page2(){
   clickAddAttachPlan();
 
   
+function addMsisdnSeries() {
+    // 1) Click the second Add button (MSISDN Number Series)
+    const addButtons = document.querySelectorAll('button.btn-info:has(.material-icons)');
+    const addBtn = addButtons[1]; // index 1 = MSISDN Add
+    if (!addBtn) {
+        console.warn('MSISDN Add button not found.');
+        return;
+    }
+    addBtn.click();
+    console.log("1. MSISDN Add button clicked ✅");
 
-  function addMsisdnSeries() {
-      // 1. Click Add button
-      const addBtn2 = document.querySelectorAll('button.btn-info:has(.material-icons)')[1];
+    // 2) Wait for table, select first checkbox, THEN click Save
+    setTimeout(() => {
+        const checkboxes = document.querySelectorAll('table input.form-check-input[type="checkbox"]');
+        console.log("MSISDN checkboxes found:", checkboxes.length);
 
-      if (!addBtn2) {
-          console.warn('Add button not found.');
-          return;
-      }
-      addBtn2.click();
-      console.log("1. Add button clicked ✅");
-
-      // 2. Check the checkbox
-      function addRandomMsisdn() {
-        // 1) Click the second "add" button (MSISDN Number Series)
-        const addButtons = document.querySelectorAll('button.btn-info:has(.material-icons)');
-        const addBtn = addButtons[1]; // index 1 = second button
-        if (!addBtn) {
-            console.warn("MSISDN Add button not found.");
+        if (!checkboxes.length) {
+            console.warn("No MSISDN checkboxes found.");
             return;
         }
-        addBtn.click();
-        console.log("Add MSISDN button clicked ✅");
 
-        // 2) Wait for the table, select first checkbox
+        const cb = checkboxes[0]; // first number
+        cb.checked = true;
+        ["click", "input", "change"].forEach(type =>
+            cb.dispatchEvent(new Event(type, { bubbles: true }))
+        );
+        console.log("2. MSISDN row selected ✅");
+
+        // 3) After selection, click the Save in MSISDN modal
         setTimeout(() => {
-            const checkboxes = document.querySelectorAll('table input.form-check-input[type="checkbox"]');
-            console.log("MSISDN checkboxes found:", checkboxes.length);
-
-            if (!checkboxes.length) {
-                console.warn("No MSISDN checkboxes found.");
+            const modal = [...document.querySelectorAll('.modal-content')]
+                .find(m => m.textContent.includes('MSISDN List'));
+            if (!modal) {
+                console.warn('MSISDN modal not found.');
                 return;
             }
 
-            const cb = checkboxes[0]; // first number
-            cb.checked = true;
-            ["click", "input", "change"].forEach(type =>
-                cb.dispatchEvent(new Event(type, { bubbles: true }))
-            );
-            console.log("MSISDN row selected ✅");
-        }, 1200); // adjust delay if needed
-      }
-      // run this in console
-      addRandomMsisdn();
+            const footerRow = modal.querySelector('.row.my-4 .col-12.d-flex.justify-content-end');
+            if (!footerRow) {
+                console.warn('Footer row with Save/Reset not found.');
+                return;
+            }
 
-      // add save btn
+            const saveBtn = footerRow.querySelector('button.btn.btn-info.mx-2');
+            if (!saveBtn) {
+                console.warn('Save button in footer not found.');
+                return;
+            }
 
-  }
+            saveBtn.click();
+            console.log('3. MSISDN modal Save clicked ✅');
+        }, 400); // small delay after checkbox to let UI update
+
+    }, 1200); // wait for list to render
+}
 
   // run it
   addMsisdnSeries();
