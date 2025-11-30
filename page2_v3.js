@@ -233,8 +233,6 @@ async function page2() {
   // simple wait helper
   const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-  
-
   // -----------------------------------------
   // 1. PREPAID CHECKBOX
   // -----------------------------------------
@@ -452,11 +450,17 @@ async function page2() {
       return false;
     }
 
-    const term = prompt("Enter IMSI search term:");
-    if (!term) {
+    
+  const suffix = prompt("Enter ICCID suffix (e.g. 8925263790000-XXXXXXX):");
+  if (!suffix) return false;
+  
+  // Auto-prefix the full ICCID
+  const term = `8925263790000${suffix}`;
+  console.log(`🔍 Searching ICCID: ${term}`);
+      if (!term) {
       console.warn("No IMSI term entered.");
       return false;
-    }
+    }                   
 
     const searchInput = modal.querySelector("input#searchtextIMSI.form-control");
     if (!searchInput) {
@@ -547,7 +551,6 @@ async function page2() {
   // await goToNextOnce("Checkout");
 }
 
-// 8925263790000
 // to RUN write
 // page1()
 // than
