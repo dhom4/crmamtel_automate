@@ -589,16 +589,21 @@ async function clickAddAttachPlan() {
     await wait(700);
     return true;
   }
+  
+  async function next() {
+    // page 2 → 3
+    await goToNextOnce("Next");
+    // if needed page 3 → 4:
+    await goToNextOnce("Next");
+    // and final checkout:
+    await goToNextOnce("Checkout");
+    
+  }
 
-  // page 2 → 3
-  // await goToNextOnce("Next");
-  // if needed page 3 → 4:
-  // await goToNextOnce("Next");
-  // and final checkout:
-  // await goToNextOnce("Checkout");
 }
 
 // to RUN write
 // page1()
 // than
 // page2()
+// next()
