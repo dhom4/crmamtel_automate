@@ -559,7 +559,7 @@ async function clickAddAttachPlan() {
       console.warn("No IMSI ICCID_number entered.");
       return false;
     }
-    saveIccid(ICCID_number);
+    saveIccid(String(ICCID_number));
     gloable_icc_id = ICCID_number;
 
     const searchInput = modal.querySelector(
