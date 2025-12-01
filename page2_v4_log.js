@@ -1,4 +1,3 @@
-
 // =========================================
 // SIMPLE ICCID LOGGER (WITH AUTO-SAVE)
 // =========================================
@@ -17,7 +16,7 @@ function saveIccid(iccid) {
   console.log(`📝 #${logCount}: ${iccid}`);
 }
 
-function download_log() {  // renamed for easy console usage
+function downloadLog() {  // renamed for easy console usage
   if (!iccidLog.length) return;
   const csv = ['ID,Time,ICCID',
     ...iccidLog.map(e => `${e.id},"${e.time}","${e.iccid}"`)
@@ -28,7 +27,6 @@ function download_log() {  // renamed for easy console usage
   a.click();
   console.log(`💾 AUTO-SAVED ${iccidLog.length} ICCIDs!`);
 }
-
 
 function page1() {
   function fillFormFromConsole() {
@@ -513,7 +511,7 @@ async function clickAddAttachPlan() {
       console.warn("No IMSI ICCID_number entered.");
       return false;
     }
-    saveIccid(ICCID_number);  // ← Add the logging here
+    saveIccid(ICCID_number)
 
     const searchInput = modal.querySelector(
       "input#searchtextIMSI.form-control"
@@ -601,13 +599,7 @@ async function clickAddAttachPlan() {
   }
   await wait(1000);
 
-  
-  
-
-
-}
-
-// -----------------------------------------
+  // -----------------------------------------
   // 5. NAVIGATION: NEXT → PAGE 3 → PAGE 4
   // -----------------------------------------
   async function goToNextOnce(label = "Next") {
@@ -629,6 +621,17 @@ async function clickAddAttachPlan() {
     return true;
   }
   
+  async function next() {
+    // page 2 → 3
+    await goToNextOnce("Next");
+    // if needed page 3 → 4:
+    await goToNextOnce("Next");
+    // and final checkout:
+    await goToNextOnce("Checkout");
+    
+  }
+
+}
 async function next() {
   // Simple wait helper
   const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -657,7 +660,9 @@ async function next() {
   await goToNextOnce("Next");
   // Final checkout (if present)
   await goToNextOnce("Checkout");
+  console.log(ICCID_number)
 }
+
 // to RUN write
 // page1()
 // than
