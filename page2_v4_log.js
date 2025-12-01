@@ -1,20 +1,65 @@
-let gloable_icc_id = null
+const gloable_icc_id = null
+
+// Copy
+async function cp(text) {
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+      console.log(`✅ COPIED: ${text}`);
+    } else {
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      console.log(`COPIED (fallback): ${text}`);
+    }
+  } catch (err) {
+    console.error('Copy failed:', err);
+  }
+}
+
+
 // =========================================
 // SIMPLE ICCID LOGGER (WITH AUTO-SAVE)
 // =========================================
-let iccidLog = JSON.parse(localStorage.getItem('iccidLog') || '[]');
-let logCount = parseInt(localStorage.getItem('iccidCount') || '0');
+let iccidLog = JSON.parse(sessionStorage.getItem('iccidLog') || '[]'); // Use sessionStorage first
+let logCount = parseInt(sessionStorage.getItem('iccidCount') || '0');
 
 function saveIccid(iccid) {
-  logCount++;
-  iccidLog.push({
-    id: logCount,
-    time: new Date().toLocaleString('en-US', { timeZone: 'Africa/Mogadishu' }),
-    iccid: iccid
-  });
-  localStorage.setItem('iccidLog', JSON.stringify(iccidLog));
-  localStorage.setItem('iccidCount', logCount);
-  console.log(`📝 #${logCount}: ${iccid}`);
+  try {
+    logCount++;
+    const logEntry = {
+      id: logCount,
+      time: new Date().toLocaleString('en-US', { timeZone: 'Africa/Mogadishu' }),
+      iccid: iccid
+    };
+    iccidLog.push(logEntry);
+    
+    // Debounce save to localStorage (batch multiple saves)
+    if (!window.iccidSaveTimeout) {
+      window.iccidSaveTimeout = setTimeout(() => {
+        try {
+          localStorage.setItem('iccidLog', JSON.stringify(iccidLog.slice(-100))); // Keep last 100
+          localStorage.setItem('iccidCount', logCount);
+          console.log(`📝 Saved #${logCount}: ${iccid} (Total: ${iccidLog.length})`);
+        } catch (e) {
+          // Fallback to sessionStorage
+          sessionStorage.setItem('iccidLog', JSON.stringify(iccidLog));
+          sessionStorage.setItem('iccidCount', logCount);
+          console.warn('LocalStorage full, using sessionStorage:', e.message);
+        }
+        window.iccidSaveTimeout = null;
+      }, 500);
+    }
+  } catch (e) {
+    console.error('Logger error:', e);
+  }
+  cp(iccid)
+
 }
 
 function downloadLog() {  // renamed for easy console usage
@@ -28,6 +73,8 @@ function downloadLog() {  // renamed for easy console usage
   a.click();
   console.log(`💾 AUTO-SAVED ${iccidLog.length} ICCIDs!`);
 }
+
+
 
 function page1() {
   function fillFormFromConsole() {
@@ -663,15 +710,10 @@ async function next() {
   // Final checkout (if present)
   await goToNextOnce("Checkout");
   console.log(gloable_icc_id)
+
+
 }
 
-function cp(text) {
-  navigator.clipboard ? 
-    navigator.clipboard.writeText(text).then(() => console.log(`✅ COPIED: ${text}`)) :
-    (t=document.createElement('textarea'),t.value=text,document.body.appendChild(t),t.select(),document.execCommand('copy'),document.body.removeChild(t),console.log(`✅ COPIED: ${text}`));
-}
-
-cp(gloable_icc_id)
 // to RUN write
 // page1()
 // than
