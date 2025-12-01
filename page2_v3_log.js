@@ -499,7 +499,7 @@ async function addMsisdnSeries() {
       console.warn("No IMSI term entered.");
       return false;
     }      
-    saveIccid(icc_id); 
+    saveIccid(icc_id_num); 
 
     const searchInput = modal.querySelector("input#searchtextIMSI.form-control");
     if (!searchInput) {
