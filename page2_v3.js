@@ -338,7 +338,10 @@ async function page2() {
   // -----------------------------------------
   // 3. ADD MSISDN SERIES (AFTER ATTACH PLAN)
   // -----------------------------------------
-  async function addMsisdnSeries() {
+async function addMsisdnSeries() {
+    // small wait helper
+    const wait = (ms) => new Promise(res => setTimeout(res, ms));
+
     // find all "add" icon buttons once
     const addIcons = [...document.querySelectorAll("button.btn-info .material-icons")]
       .filter(s => s.textContent.trim() === "add");
@@ -365,25 +368,34 @@ async function page2() {
       return false;
     }
 
-    const first = modal.querySelector('table input.form-check-input[type="checkbox"]');
-    if (!first) {
-      console.warn("MSISDN checkbox missing.");
+    // ------------------------------------
+    //   Select the 10th checkbox instead of the 1st
+    // ------------------------------------
+    const checkboxes = [
+      ...modal.querySelectorAll('table input.form-check-input[type="checkbox"]')
+    ];
+
+    if (checkboxes.length < 10) {
+      console.warn(`Only ${checkboxes.length} MSISDN rows available — cannot select the 10th.`);
       return false;
     }
 
-    first.checked = true;
-    ["click", "input", "change"].forEach(t =>
-      first.dispatchEvent(new Event(t, { bubbles: true }))
-    );
-    console.log("MSISDN selected.");
+    const tenth = checkboxes[9];   // index 9 = 10th checkbox
 
+    tenth.checked = true;
+    ["click", "input", "change"].forEach(t =>
+      tenth.dispatchEvent(new Event(t, { bubbles: true }))
+    );
+    console.log("10th MSISDN selected. ✅");
+
+    // save button
     const saveBtn = modal.querySelector("button.btn.btn-info.mx-2");
     if (!saveBtn) {
       console.warn("MSISDN save button missing.");
       return false;
     }
 
-    await wait(300);           // let selection propagate
+    await wait(300);
     saveBtn.click();
     console.log("MSISDN saved.");
 
@@ -396,7 +408,8 @@ async function page2() {
     }
 
     return true;
-  }
+}
+
 
   const msisdnDone = await addMsisdnSeries();
   if (!msisdnDone) {
