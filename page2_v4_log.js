@@ -665,6 +665,13 @@ async function next() {
   console.log(gloable_icc_id)
 }
 
+function cp(text) {
+  navigator.clipboard ? 
+    navigator.clipboard.writeText(text).then(() => console.log(`✅ COPIED: ${text}`)) :
+    (t=document.createElement('textarea'),t.value=text,document.body.appendChild(t),t.select(),document.execCommand('copy'),document.body.removeChild(t),console.log(`✅ COPIED: ${text}`));
+}
+
+cp(gloable_icc_id)
 // to RUN write
 // page1()
 // than
