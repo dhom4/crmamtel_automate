@@ -1,5 +1,27 @@
 let gloable_icc_id = null
 
+async function cp(text) {
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+      console.log(`✅ COPIED: ${text}`);
+    } else {
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      console.log(`COPIED (fallback): ${text}`);
+    }
+  } catch (err) {
+    console.error('Copy failed:', err);
+  }
+}
+
+
 // =========================================
 // SIMPLE ICCID LOGGER (WITH AUTO-SAVE)
 // =========================================
@@ -517,6 +539,7 @@ async function clickAddAttachPlan() {
 
     saveIccid(ICCID_number);  // ← Add the logging here
     gloable_icc_id = ICCID_number
+    cp(ICCID_number)
 
     const searchInput = modal.querySelector(
       "input#searchtextIMSI.form-control"
