@@ -1,5 +1,27 @@
 let gloable_icc_id = null
 
+async function cp(text) {
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+      console.log(`✅ COPIED: ${text}`);
+    } else {
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      console.log(`COPIED (fallback): ${text}`);
+    }
+  } catch (err) {
+    console.error('Copy failed:', err);
+  }
+}
+
+
 // =========================================
 // SIMPLE ICCID LOGGER (WITH AUTO-SAVE)
 // =========================================
@@ -517,6 +539,7 @@ async function clickAddAttachPlan() {
 
     saveIccid(ICCID_number);  // ← Add the logging here
     gloable_icc_id = ICCID_number
+    
 
     const searchInput = modal.querySelector(
       "input#searchtextIMSI.form-control"
@@ -631,151 +654,110 @@ async function clickAddAttachPlan() {
     await wait(700);
     return true;
   }
-let global_icc_id = null; // <-- Make sure this is filled before calling next()
 
 async function next() {
-  const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+  const wait = (ms) => new Promise(res => setTimeout(res, ms));
 
-  async function goToNextOnce(label = "Next") {
+  // Button clicker
+  async function clickButton(label, timeout = 6000) {
+    const start = performance.now();
     let btn = null;
-    for (let i = 0; i < 30; i++) {
-      btn = [...document.querySelectorAll("button.btn.btn-info")].find(
-        (b) => b.textContent.trim().toLowerCase() === label.toLowerCase()
-      );
+
+    while (performance.now() - start < timeout) {
+      btn = [...document.querySelectorAll("button")]
+        .find(b => b.textContent.trim().toLowerCase() === label.toLowerCase());
+
       if (btn) break;
       await wait(150);
     }
+
     if (!btn) {
-      console.warn(`${label} button not found.`);
+      console.warn(`Button "${label}" not found.`);
       return false;
     }
+
     btn.click();
-    console.log(`${label} clicked.`);
+    console.log(`Clicked: ${label}`);
     await wait(700);
     return true;
   }
 
-  // --------------------------
-  // 1. Close the popup window
-  // --------------------------
-  async function closeErrorPopup() {
-    for (let i = 0; i < 20; i++) {
-      let closeBtn = document.querySelector("button.btn.btn-small.btn-info[data-dismiss='modal']");
-      if (closeBtn) {
-        closeBtn.click();
-        console.log("Popup close clicked.");
-        await wait(500);
-        return true;
-      }
-      await wait(150);
+  // ===========================================
+  // Normal steps WITH await
+  // ===========================================
+  await clickButton("Next");      // page 2 → 3
+  await clickButton("Next");      // page 3 → 4
+  await clickButton("Checkout");  // checkout
+
+  // ===========================================
+  // Close modal (WITH await, same as before)
+  // ===========================================
+  async function closeModal(timeout = 8000) {
+    const start = performance.now();
+    let closeBtn = null;
+
+    while (performance.now() - start < timeout) {
+      closeBtn = [...document.querySelectorAll("button.btn.btn-small.btn-info")]
+        .find(b => b.textContent.trim().toLowerCase() === "close");
+
+      if (closeBtn) break;
+      await wait(200);
     }
-    console.warn("Popup close button not found.");
-    return false;
+
+    if (closeBtn) {
+      closeBtn.click();
+      console.log("Modal closed.");
+      await wait(500);
+    }
   }
+  await closeModal();
 
-  // --------------------------
-  // 2. Go to home page
-  // --------------------------
-  async function goHome() {
-    for (let i = 0; i < 20; i++) {
-      let homeLink = document.querySelector("a.nav-link.nav-link-lg.logo");
-      if (homeLink) {
-        homeLink.click();
-        console.log("Home clicked.");
-        await wait(800);
-        return true;
-      }
-      await wait(150);
+  // ===========================================
+  // 🔥 NEW PARTS — NO await used 🔥
+  // ===========================================
+
+  // 1️⃣ Click home logo immediately (no await)
+  (function clickHomeLogo() {
+    const logo = document.querySelector("img.logoImg");
+    if (logo) {
+      logo.click();
+      console.log("Home logo clicked.");
+    } else {
+      console.warn("Home logo not found.");
     }
-    console.warn("Home link not found.");
-    return false;
-  }
+  })();
 
-  // --------------------------
-  // 3. Select ICCID in dropdown
-  // --------------------------
-  async function selectICCID() {
-    for (let i = 0; i < 20; i++) {
-      let sel = document.querySelector("select#idtype");
-      if (sel) {
-        let option = [...sel.options].find(o => o.textContent.trim() === "ICCID");
-        if (option) {
-          sel.value = option.value;
-          sel.dispatchEvent(new Event("change"));
-          console.log("ICCID selected.");
-          await wait(400);
-          return true;
-        }
-      }
-      await wait(150);
-    }
-    console.warn("ICCID not found in dropdown.");
-    return false;
-  }
-
-  // --------------------------
-  // 4. Type ICCID from global variable
-  // --------------------------
-  async function typeICCID() {
-    if (!global_icc_id) {
-      console.warn("global_icc_id is empty!");
-      return false;
+  // 2️⃣ Select ICCID immediately (no await)
+  (function selectICCID() {
+    const select = document.querySelector("select#idtype");
+    if (!select) {
+      console.warn("Dropdown not found.");
+      return;
     }
 
-    for (let i = 0; i < 20; i++) {
-      let input = document.querySelector("input[formcontrolname='idvalue']");
-      if (input) {
-        input.value = global_icc_id;
-        input.dispatchEvent(new Event("input"));
-        console.log("ICCID typed.");
-        await wait(400);
-        return true;
-      }
-      await wait(150);
+    const option = [...select.options].find(
+      opt => opt.textContent.trim().toLowerCase() === "iccid"
+    );
+
+    if (!option) {
+      console.warn("ICCID option not found.");
+      return;
     }
-    console.warn("ICCID input field not found.");
-    return false;
-  }
 
-  // --------------------------
-  // 5. Click Search button
-  // --------------------------
-  async function clickSearch() {
-    for (let i = 0; i < 20; i++) {
-      let btn = document.querySelector("button.btn.btn-info[type='submit']");
-      if (btn) {
-        btn.click();
-        console.log("Search clicked.");
-        await wait(600);
-        return true;
-      }
-      await wait(150);
-    }
-    console.warn("Search button not found.");
-    return false;
-  }
+    select.value = option.value;
+    select.dispatchEvent(new Event("change"));
+    console.log("Dropdown changed to ICCID.");
+  })();
 
-  // --------------------------
-  // EXECUTION ORDER
-  // --------------------------
-  await closeErrorPopup();
-  await goHome();
-  await selectICCID();
-  await typeICCID();
-  await clickSearch();
-}
-
-  // page 2→3
-  await goToNextOnce("Next");
-  // page 3→4 (repeatable)
-  await goToNextOnce("Next");
-  // Final checkout (if present)
-  await goToNextOnce("Checkout");
-  console.log(gloable_icc_id)
+  // ===========================================
+  // FINAL PART (still using await or normal)
+  // ===========================================
+  console.log(gloable_icc_id);
+  cp(gloable_icc_id);
 }
 
 
-cp(gloable_icc_id)
+
 
 // to RUN write
 // page1()
