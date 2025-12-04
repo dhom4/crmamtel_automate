@@ -327,6 +327,7 @@ async function clickAddAttachPlan() {
     const addBtn = addIcon.closest("button");
     addBtn.click();
 
+      await wait(1000)
     // Wait for modal - reduced from 40x100ms (4s) to 20x50ms (1s)
     let modal = null;
     for (let i = 0; i < 20; i++) {
@@ -338,7 +339,8 @@ async function clickAddAttachPlan() {
       console.warn("Product Catalog modal did not load.");
       return false;
     }
-
+    
+    await wait(1000)
     // Find Base Plan - reduced from 40x100ms (4s) to 15x50ms (750ms)
     let basePlan = null;
     for (let i = 0; i < 15; i++) {
@@ -355,6 +357,7 @@ async function clickAddAttachPlan() {
       return false;
     }
 
+    await wait(1000)
     basePlan.click();
 
     // Save button - reduced from 40x100ms (4s) to 15x50ms (750ms)
@@ -544,58 +547,7 @@ async function clickAddAttachPlan() {
     }
     searchButton.click();
 
-    await wait(1000);
-
-    // const first = modal.querySelector(
-    //   'table input.form-check-input[type="checkbox"]'
-    // );
-    // if (!first) {
-    //   console.warn("ICCID checkbox not found.");
-    //   return false;
-    // }
-    // first.checked = true;
-    // ["click", "input", "change"].forEach((e) =>
-    //   first.dispatchEvent(new Event(e, { bubbles: true }))
-    // );
-
-    const first = modal.querySelector(
-      'table input.form-check-input[type="checkbox"]'
-    );
-    if (!first) {
-      console.warn("ICCID checkbox not found.");
-      return false;
-    }
-
-    // Validate that this checkbox is in the correct row matching the search ICCID_number
-    const row = first.closest('tr');
-    if (!row || !row.textContent.includes(ICCID_number.slice(-7))) {
-      console.warn("Found checkbox row doesn't match search ICCID_number");
-      return false;
-    }
-    first.checked = true;
-    ["click", "input", "change"].forEach((e) =>
-      first.dispatchEvent(new Event(e, { bubbles: true }))
-    );
-
-    // After search, find and click the checkbox if it appears
-    const checkbox = modal.querySelector('input[type="checkbox"].form-check-input#flexCheckDefault');
-    if (checkbox) {
-      const row = checkbox.closest('tr');
-      if (row && row.textContent.includes(ICCID_number.slice(-7))) {  // Validate correct row
-        checkbox.checked = true;
-        ["click", "input", "change"].forEach((e) =>
-          checkbox.dispatchEvent(new Event(e, { bubbles: true }))
-        );
-        return true;
-      }
-    }
-
-    const saveBtn = modal.querySelector("button.btn.btn-info.mx-2");
-    if (!saveBtn) {
-      return false;
-    }
-    await wait(300);
-    // saveBtn.click();
+    await wait(1000)
     
     console.log("ICCID done.");
     return true;
@@ -669,8 +621,9 @@ async function next() {
   // ===========================================
   await clickButton("Next");      // page 2 → 3
   await clickButton("Next");      // page 3 → 4
+   await wait(1000);
   await clickButton("Checkout");  // checkout
-
+   await wait(1000);
   // ===========================================
   // Close modal (WITH await, same as before)
   // ===========================================
@@ -811,7 +764,8 @@ function fillSearchBar() {
   activateBtn.click();
   console.log("Activate button clicked.");
 }
-
+  
+await wait(1000);
 clickHomeLogo();
 selectICCID();
 fillSearchBar();
