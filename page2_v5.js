@@ -18,6 +18,14 @@ function saveIccid(iccid) {
   console.log(`📝 #${logCount}: ${iccid}`);
 }
 
+// // 
+// Clear everything:
+// iccidLog = [];
+// logCount = 0;
+// localStorage.setItem('iccidLog', JSON.stringify(iccidLog));
+// localStorage.setItem('iccidCount', logCount);
+// //
+
 function download_log() {
   if (!iccidLog.length) return;
   const csv = [
