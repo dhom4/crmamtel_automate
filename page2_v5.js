@@ -332,8 +332,16 @@ function generateActivationReport(format = 'detailed') {
 window.generateActivationReport = generateActivationReport;
 
 // --- RETRY FUNCTION ---
+// --- RETRY FUNCTION (FIXED: preserves state on cancel) ---
 async function retryIccidSelection() {
   console.log("🔁 Retrying ICCID selection...");
+
+  // ✅ SAVE CURRENT STATE in case user cancels
+  const original_iccid = gloable_icc_id;
+  const original_prompt = iccidPromptProvided;
+  const original_confirmed = iccidUiConfirmed;
+
+  // Reset for retry attempt
   iccidPromptProvided = false;
   iccidUiConfirmed = false;
   gloable_icc_id = null;
@@ -343,6 +351,11 @@ async function retryIccidSelection() {
   const addBtn = addIcons[2]?.closest("button");
   if (!addBtn) {
     alert("❌ ICCID Add button not found. Is Page 2 loaded?");
+    
+    // ❌ Restore state if we can't even start retry
+    gloable_icc_id = original_iccid;
+    iccidPromptProvided = original_prompt;
+    iccidUiConfirmed = original_confirmed;
     return false;
   }
 
@@ -356,20 +369,37 @@ async function retryIccidSelection() {
   }
   if (!modal) {
     alert("❌ ICCID modal failed to open.");
+    
+    // ❌ Restore state
+    gloable_icc_id = original_iccid;
+    iccidPromptProvided = original_prompt;
+    iccidUiConfirmed = original_confirmed;
     return false;
   }
 
   // Get valid 7-digit suffix with retry
   const cleanSuffix = await getValidIccidSuffix("Re-enter ICCID suffix (7 digits):");
+  
+  // ✅ USER CANCELED OR FAILED INPUT → RESTORE ORIGINAL STATE
   if (!cleanSuffix) {
+    gloable_icc_id = original_iccid;
+    iccidPromptProvided = original_prompt;
+    iccidUiConfirmed = original_confirmed;
+    console.log("↩️ Retry canceled or invalid — restored previous ICCID state.");
     return false;
   }
+
   const ICCID_number = `8925263790000${cleanSuffix}`;
 
   const searchInput = modal.querySelector("input#searchtextIMSI.form-control");
   const searchButton = modal.querySelector(".input-group-append button.btn.btn-info");
   if (!searchInput || !searchButton) {
     alert("Search field not found.");
+    
+    // ❌ Restore state
+    gloable_icc_id = original_iccid;
+    iccidPromptProvided = original_prompt;
+    iccidUiConfirmed = original_confirmed;
     return false;
   }
 
@@ -390,8 +420,11 @@ async function retryIccidSelection() {
     alert("✅ ICCID re-selection successful!");
     return true;
   } else {
-    gloable_icc_id = null;
-    alert("⚠️ ICCID not detected after retry.");
+    // ❌ ICCID not detected → restore original state
+    gloable_icc_id = original_iccid;
+    iccidPromptProvided = original_prompt;
+    iccidUiConfirmed = original_confirmed;
+    alert("⚠️ ICCID not detected after retry. Restored previous entry.");
     return false;
   }
 }
