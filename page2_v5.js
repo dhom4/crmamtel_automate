@@ -39,7 +39,7 @@ function saveIccid(iccid, options = {}) {
 
   const logEntry = {
     id: Date.now(),
-    iccid: iccid.trim(),
+    iccid: iccid.length > 7 ? iccid.slice(-7) : iccid.trim(), // Store only last 7 digits
     msisdn: (options.msisdn || '').trim(),
     timestamp: new Date().toISOString(),
     timeDisplay: new Date().toLocaleString('en-US', { timeZone: 'Africa/Mogadishu' }),
@@ -76,6 +76,7 @@ function clearAllLogs() {
 }
 
 // --- Export to CSV ---
+// --- Export to CSV (clean, easy-to-copy format) ---
 function download_log() {
   if (!iccidLog.length) {
     alert("No logs to export.");
@@ -99,13 +100,13 @@ function download_log() {
   const headers = ['Date', 'Time', 'ICCID', 'MSISDN', 'Notes'];
   const rows = iccidLog.map(e => {
     const { date, time } = formatDateDisplay(e.timestamp);
-    const escape = (str) => `"${String(str || '').replace(/"/g, '""')}"`;
+    // ✅ CLEAN FORMAT: No quotes, no ="..." 
     return [
-      escape(date),
-      escape(time),
-      `"=""${e.iccid}""`,
-      escape(e.msisdn),
-      '""'
+      date,
+      time,
+      e.iccid,        // Plain 7-digit ICCID
+      e.msisdn,       // Plain MSISDN (without 252)
+      ''              // Empty Notes
     ].join(',');
   });
 
@@ -201,59 +202,134 @@ clearOldLogs();
 
 // --- GENERATE REPORT ---
 // --- GENERATE DAILY ACTIVATION REPORT ---
-function generateActivationReport() {
+// --- ENHANCED ACTIVATION REPORT ---
+// --- UNIFIED ACTIVATION REPORT (with all formats) ---
+function generateActivationReport(format = 'detailed') {
   if (!iccidLog.length) {
-    alert("No logs to report.");
+    alert("No logs to export.");
     return;
   }
 
-  // Group logs by date (DD/MM/YYYY)
-  const dailyCounts = {};
-  for (const entry of iccidLog) {
-    // Extract DD/MM/YYYY from timestamp
-    const d = new Date(entry.timestamp);
-    const day = String(d.getDate()).padStart(2, '0');
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const year = d.getFullYear();
-    const dateKey = `${day}/${month}/${year}`;
+  let content = '';
+  let filename = '';
+  let type = 'text/plain';
 
-    dailyCounts[dateKey] = (dailyCounts[dateKey] || 0) + 1;
+  if (format === 'simple') {
+    // Simple daily counts
+    const dailyCounts = {};
+    for (const entry of iccidLog) {
+      const d = new Date(entry.timestamp);
+      const dateKey = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+      dailyCounts[dateKey] = (dailyCounts[dateKey] || 0) + 1;
+    }
+    
+    const sortedDates = Object.keys(dailyCounts).sort((a, b) => {
+      const [aD, aM, aY] = a.split('/');
+      const [bD, bM, bY] = b.split('/');
+      return new Date(bY, bM-1, bD) - new Date(aY, aM-1, aD);
+    });
+    
+    const lines = [
+      `ICCID SIMPLE REPORT`,
+      `Total: ${iccidLog.length}`,
+      ``,
+      `Daily Counts:`
+    ];
+    sortedDates.forEach(date => {
+      lines.push(`${date}: ${dailyCounts[date]}`);
+    });
+    content = lines.join('\n');
+    filename = `ICCID-Simple-${new Date().toISOString().split('T')[0]}.txt`;
+
+  } else if (format === 'csv') {
+    // ✅ CSV WITH NOTES COLUMN
+    const lines = ['Date,Time,ICCID,MSISDN,Notes'];
+    for (const entry of iccidLog) {
+      const d = new Date(entry.timestamp);
+      const date = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+      const time = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+      lines.push(`${date},${time},${entry.iccid},${entry.msisdn},`);
+    }
+    content = lines.join('\n');
+    filename = `ICCID-Export-${new Date().toISOString().split('T')[0]}.csv`;
+    type = 'text/csv';
+
+  } else {
+    // Detailed report with error detection + copy blocks
+    const dailyData = {};
+    for (const entry of iccidLog) {
+      const d = new Date(entry.timestamp);
+      const dateKey = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+      if (!dailyData[dateKey]) dailyData[dateKey] = [];
+      dailyData[dateKey].push({ iccid: entry.iccid, msisdn: entry.msisdn });
+    }
+
+    const sortedDates = Object.keys(dailyData).sort((a, b) => {
+      const [aDay, aMonth, aYear] = a.split('/');
+      const [bDay, bMonth, bYear] = b.split('/');
+      return new Date(bYear, bMonth - 1, bDay) - new Date(aYear, aMonth - 1, aDay);
+    });
+
+    const lines = [
+      `ICCID ACTIVATION REPORT`,
+      `=====================`,
+      `Total Activations: ${iccidLog.length}`,
+      ``
+    ];
+
+    lines.push(`DAILY BREAKDOWN:`);
+    for (const date of sortedDates) {
+      const entries = dailyData[date];
+      lines.push(`\n${date} (${entries.length} activation(s)):`);
+      entries.forEach(e => {
+        lines.push(`  • ICCID: ${e.iccid} | MSISDN: ${e.msisdn}`);
+      });
+    }
+
+    // Error detection
+    const invalidIccids = iccidLog.filter(e => e.iccid.length !== 7);
+    const invalidMsisdns = iccidLog.filter(e => e.msisdn.length < 9 || e.msisdn.length > 10);
+    
+    if (invalidIccids.length > 0 || invalidMsisdns.length > 0) {
+      lines.push(`\n⚠️  VALIDATION WARNINGS:`);
+      if (invalidIccids.length > 0) {
+        lines.push(`  - ${invalidIccids.length} ICCID(s) not 7 digits:`);
+        invalidIccids.forEach(e => lines.push(`    → ${e.iccid}`));
+      }
+      if (invalidMsisdns.length > 0) {
+        lines.push(`  - ${invalidMsisdns.length} MSISDN(s) invalid length (should be 9-10 digits):`);
+        invalidMsisdns.forEach(e => lines.push(`    → ${e.msisdn}`));
+      }
+    }
+
+    // Copy-paste blocks
+    lines.push(
+      `\n--- COPY-PASTE BLOCKS ---`,
+      `ICCID Suffixes (comma-separated):`,
+      iccidLog.map(e => e.iccid).join(', '),
+      ``,
+      `MSISDNs (newline-separated):`,
+      iccidLog.map(e => e.msisdn).join('\n')
+    );
+
+    content = lines.join('\n');
+    filename = `ICCID-Report-Complete-${new Date().toISOString().split('T')[0]}.txt`;
   }
 
-  // Sort dates (newest first)
-  const sortedDates = Object.keys(dailyCounts).sort((a, b) => {
-    const [aDay, aMonth, aYear] = a.split('/');
-    const [bDay, bMonth, bYear] = b.split('/');
-    return new Date(bYear, bMonth - 1, bDay) - new Date(aYear, aMonth - 1, aDay);
-  });
-
-  // Build report
-  const total = iccidLog.length;
-  const lines = [
-    `ICCID DAILY ACTIVATION REPORT`,
-    `============================`,
-    `Total Activations: ${total}`,
-    ``,
-    `Daily Breakdown:`
-  ];
-
-  for (const date of sortedDates) {
-    lines.push(`${date}: ${dailyCounts[date]} activation(s)`);
-  }
-
-  const report = lines.join('\n');
-
-  // Download as .txt
-  const blob = new Blob([report], { type: 'text/plain' });
+  // Export
+  const blob = new Blob([content], { type: `${type};charset=utf-8` });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `ICCID-Daily-Report-${new Date().toISOString().split('T')[0]}.txt`;
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+
+// Keep the old name as alias for backward compatibility
+window.generateActivationReport = generateActivationReport;
 
 // --- RETRY FUNCTION ---
 async function retryIccidSelection() {
@@ -699,8 +775,10 @@ async function page2() {
         msisdnRow.querySelector('td');
 
       if (msisdnCell) {
-        gloable_msisdn = msisdnCell.textContent.trim().replace(/\D/g, '');
-        console.log("📱 Auto-captured MSISDN:", gloable_msisdn);
+        let rawMsisdn = msisdnCell.textContent.trim().replace(/\D/g, '');
+        // Remove 252 prefix if present
+        gloable_msisdn = rawMsisdn.startsWith('252') ? rawMsisdn.substring(3) : rawMsisdn;
+        console.log("📱 Auto-captured MSISDN (cleaned):", gloable_msisdn);
       }
     }
 
