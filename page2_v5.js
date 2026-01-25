@@ -1,49 +1,351 @@
-let gloable_icc_id = null
+// =========================================
+// ENHANCED ICCID LOGGER — COMPLETE VERSION
+// =========================================
 
-// =========================================
-// SIMPLE ICCID LOGGER (WITH AUTO-SAVE)
-// =========================================
+let gloable_icc_id = null;
+let gloable_msisdn = null;
+let iccidPromptProvided = false;
+let iccidUiConfirmed = false;
+
 let iccidLog = JSON.parse(localStorage.getItem('iccidLog') || '[]');
-let logCount = parseInt(localStorage.getItem('iccidCount') || '0');
 
-function saveIccid(iccid) {
-  logCount++;
-  iccidLog.push({
-    id: logCount,
-    time: new Date().toLocaleString('en-US', { timeZone: 'Africa/Mogadishu' }),
-    iccid: iccid
-  });
-  localStorage.setItem('iccidLog', JSON.stringify(iccidLog));
-  localStorage.setItem('iccidCount', logCount);
-  console.log(`📝 #${logCount}: ${iccid}`);
+// --- Utility: Save logs safely ---
+function saveLog() {
+  try {
+    localStorage.setItem('iccidLog', JSON.stringify(iccidLog));
+  } catch (e) {
+    console.error("❌ localStorage save failed:", e);
+    alert("⚠️ Warning: Log not saved (storage full?)");
+  }
 }
 
-// // 
-// Clear everything:
-// iccidLog = [];
-// logCount = 0;
-// localStorage.setItem('iccidLog', JSON.stringify(iccidLog));
-// localStorage.setItem('iccidCount', logCount);
-// //
+// --- Check for duplicate ICCID ---
+function isDuplicate(iccid) {
+  return iccidLog.some(entry => entry.iccid === iccid);
+}
 
+// --- Main logging function ---
+function saveIccid(iccid, options = {}) {
+  if (!iccid || typeof iccid !== 'string') {
+    console.warn("⚠️ Invalid ICCID:", iccid);
+    return false;
+  }
+
+  if (isDuplicate(iccid)) {
+    console.log(`🔁 Duplicate ICCID ${iccid} — skipped.`);
+    alert(`ICCID ${iccid} already logged!`);
+    return false;
+  }
+
+  const logEntry = {
+    id: Date.now(),
+    iccid: iccid.trim(),
+    msisdn: (options.msisdn || '').trim(),
+    timestamp: new Date().toISOString(),
+    timeDisplay: new Date().toLocaleString('en-US', { timeZone: 'Africa/Mogadishu' }),
+    status: options.status || 'logged',
+    notes: options.notes || ''
+  };
+
+  iccidLog.push(logEntry);
+  saveLog();
+  console.log(`📝 Logged: ${iccid} → MSISDN: ${logEntry.msisdn}`);
+  return true;
+}
+
+// --- Delete log by ID ---
+function deleteLog(id) {
+  const before = iccidLog.length;
+  iccidLog = iccidLog.filter(e => e.id !== id);
+  if (iccidLog.length < before) {
+    saveLog();
+    console.log(`🗑️ Deleted log ID: ${id}`);
+    return true;
+  }
+  console.warn(`⚠️ Log ID ${id} not found.`);
+  return false;
+}
+
+// --- Clear all logs ---
+function clearAllLogs() {
+  if (confirm("Clear all ICCID logs? This cannot be undone.")) {
+    iccidLog = [];
+    saveLog();
+    console.log("🧹 All logs cleared.");
+  }
+}
+
+// --- Export to CSV (simplified per your request) ---
 function download_log() {
-  if (!iccidLog.length) return;
-  const csv = [
-    'ID,Time,ICCID',
-    ...iccidLog.map(e =>
-      `${e.id},"${e.time}","=""${e.iccid}"""` // force Excel to text
+  if (!iccidLog.length) {
+    alert("No logs to export.");
+    return;
+  }
+
+  function formatDateDisplay(dateStr) {
+    const d = new Date(dateStr);
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    const seconds = String(d.getSeconds()).padStart(2, '0');
+    return {
+      date: `${day}/${month}/${year}`,
+      time: `${hours}:${minutes}:${seconds}`
+    };
+  }
+
+  const headers = ['Date', 'Time', 'ICCID', 'MSISDN', 'Notes'];
+  const rows = iccidLog.map(e => {
+    const { date, time } = formatDateDisplay(e.timestamp);
+    const escape = (str) => `"${String(str || '').replace(/"/g, '""')}"`;
+    return [
+      escape(date),
+      escape(time),
+      `"=""${e.iccid}""`,
+      escape(e.msisdn),
+      '""'
+    ].join(',');
+  });
+
+  const csvContent = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `ICCID-Log-${new Date().toISOString().split('T')[0]}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// --- Detect ICCID in UI after selection ---
+function detectIccidInUi(expectedIccid) {
+  if (!expectedIccid) return false;
+
+  const selectors = [
+    'input[value*="' + expectedIccid.slice(-6) + '"]',
+    '[data-iccid]',
+    '.iccid-display',
+    '#iccidSummary',
+    'table tbody tr td',
+    '.selected-item span',
+    '.form-summary .row'
+  ];
+
+  for (const sel of selectors) {
+    const elements = document.querySelectorAll(sel);
+    for (const el of elements) {
+      const text = (el.value || el.textContent || el.innerText || '').replace(/\D/g, '');
+      if (text.includes(expectedIccid) || text.endsWith(expectedIccid.slice(-8))) {
+        return true;
+      }
+    }
+  }
+
+  const bodyText = document.body.innerText.replace(/\D/g, '');
+  return bodyText.includes(expectedIccid) || bodyText.endsWith(expectedIccid.slice(-8));
+}
+
+// --- AUTO-CLEAR LOGS OLDER THAN 30 DAYS ---
+function clearOldLogs() {
+  const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+  const cutoff = Date.now() - THIRTY_DAYS;
+  const originalCount = iccidLog.length;
+  
+  iccidLog = iccidLog.filter(entry => {
+    const entryTime = new Date(entry.timestamp).getTime();
+    return entryTime >= cutoff;
+  });
+
+  if (iccidLog.length < originalCount) {
+    saveLog();
+    console.log(`🧹 Cleared ${originalCount - iccidLog.length} old logs.`);
+  }
+}
+clearOldLogs(); // Run on load
+
+// --- GENERATE ACTIVATION REPORT ---
+function generateActivationReport() {
+  if (!iccidLog.length) {
+    alert("No logs to report.");
+    return;
+  }
+
+  const now = new Date();
+  const todayStr = `${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()}`;
+  const total = iccidLog.length;
+  const todayLogs = iccidLog.filter(e => 
+    e.timeDisplay.includes(todayStr.split('/')[0]) && 
+    e.timeDisplay.includes(`/${todayStr.split('/')[1]}/`)
+  ).length;
+
+  const report = [
+    `ICCID ACTIVATION REPORT`,
+    `=======================`,
+    `Total Logs: ${total}`,
+    `Today's Activations: ${todayLogs}`,
+    `Oldest Log: ${iccidLog[0].timeDisplay}`,
+    `Latest Log: ${iccidLog[iccidLog.length - 1].timeDisplay}`,
+    ``,
+    `Recent Entries (last 5):`,
+    ...iccidLog.slice(-5).map(e => 
+      `${e.timeDisplay} | ${e.iccid} | ${e.msisdn}`
     )
   ].join('\n');
 
+  const blob = new Blob([report], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-  a.download = `ICCID-Logs/${new Date().toISOString().split('T')[0]}-${logCount}.csv`;
+  a.href = url;
+  a.download = `ICCID-Report-${todayStr.replace(/\//g, '-')}.txt`;
+  document.body.appendChild(a);
   a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
+// --- SOUND & ALERTS ---
+function playSound(type) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    if (type === 'success') {
+      osc.frequency.value = 800;
+      gain.gain.value = 0.1;
+      osc.start();
+      setTimeout(() => osc.stop(), 200);
+    } else if (type === 'error') {
+      osc.frequency.value = 200;
+      gain.gain.value = 0.1;
+      osc.start();
+      setTimeout(() => {
+        osc.frequency.value = 150;
+        setTimeout(() => osc.stop(), 100);
+      }, 100);
+    }
+  } catch (e) {
+    console.warn("Sound not supported");
+  }
+}
 
+// Enhance saveIccid with sound
+const originalSaveIccid = saveIccid;
+saveIccid = function(iccid, options = {}) {
+  const result = originalSaveIccid(iccid, options);
+  if (result) {
+    playSound('success');
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification('✅ ICCID Logged', { body: iccid, silent: true });
+    }
+  }
+  return result;
+};
+
+// Enhance alert with error sound
+const originalAlert = window.alert;
+window.alert = function(msg) {
+  if (msg.includes('Duplicate') || msg.includes('required') || msg.includes('Invalid') || msg.includes('not found')) {
+    playSound('error');
+  }
+  originalAlert(msg);
+};
+
+if ('Notification' in window && Notification.permission === 'default') {
+  Notification.requestPermission();
+}
+
+// --- RETRY ICCID SELECTION FUNCTION ---
+async function retryIccidSelection() {
+  console.log("🔁 Retrying ICCID selection...");
+  iccidPromptProvided = false;
+  iccidUiConfirmed = false;
+  gloable_icc_id = null;
+
+  const wait = (ms) => new Promise(res => setTimeout(res, ms));
+  const addIcons = [...document.querySelectorAll("button.btn.btn-info .material-icons")].filter(s => s.textContent.trim() === "add");
+  const addBtn = addIcons[2]?.closest("button");
+  if (!addBtn) {
+    alert("❌ ICCID Add button not found. Is Page 2 loaded?");
+    return false;
+  }
+
+  addBtn.click();
+
+  let modal = null;
+  for (let i = 0; i < 25; i++) {
+    modal = [...document.querySelectorAll(".modal-content")].find(m => m.textContent.includes("IMSI List"));
+    if (modal) break;
+    await wait(120);
+  }
+  if (!modal) {
+    alert("❌ ICCID modal failed to open.");
+    return false;
+  }
+
+  const suffix = prompt("Re-enter ICCID suffix (e.g. -1234567):");
+  if (!suffix || suffix.trim() === '') {
+    alert("ICCID is required!");
+    return false;
+  }
+
+  const cleanSuffix = suffix.replace(/^-/, '').trim();
+  const ICCID_number = `8925263790000${cleanSuffix}`;
+  if (!/^\d{19,20}$/.test(ICCID_number)) {
+    alert("Invalid ICCID format.");
+    return false;
+  }
+
+  const searchInput = modal.querySelector("input#searchtextIMSI.form-control");
+  const searchButton = modal.querySelector(".input-group-append button.btn.btn-info");
+  if (!searchInput || !searchButton) {
+    alert("Search field not found in modal.");
+    return false;
+  }
+
+  searchInput.value = ICCID_number;
+  ["input", "change", "keyup"].forEach(e => searchInput.dispatchEvent(new Event(e, { bubbles: true })));
+  searchButton.click();
+  await wait(1200);
+
+  const closeBtn = modal.querySelector(".close") || modal.querySelector("button.btn-secondary");
+  if (closeBtn) closeBtn.click();
+  await wait(800);
+
+  if (detectIccidInUi(ICCID_number)) {
+    gloable_icc_id = ICCID_number;
+    iccidPromptProvided = true;
+    iccidUiConfirmed = true;
+    saveIccid(ICCID_number, { msisdn: gloable_msisdn });
+    alert("✅ ICCID re-selection successful!");
+    return true;
+  } else {
+    gloable_icc_id = null;
+    alert("⚠️ ICCID not detected after retry.");
+    return false;
+  }
+}
+
+// --- Expose functions globally ---
+window.saveIccid = saveIccid;
+window.deleteLog = deleteLog;
+window.clearAllLogs = clearAllLogs;
+window.download_log = download_log;
+window.generateActivationReport = generateActivationReport;
+window.retryIccidSelection = retryIccidSelection;
+window.iccidLog = iccidLog;
+
+// =========================================
+// YOUR PAGE1 / PAGE2 / NEXT CODE (MINIMALLY MODIFIED)
+// =========================================
 
 function page1() {
+  // ... [your existing page1 code unchanged] ...
   function fillFormFromConsole() {
     const formatDate = (date) => {
       const year = date.getFullYear();
@@ -89,13 +391,6 @@ function page1() {
       return button;
     };
 
-    // Simple sleep helper (kept in case you want manual waits later)
-    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-    // =========================
-    // Static data
-    // =========================
-
     const today = new Date();
     const expiryDateObj = new Date(today);
     expiryDateObj.setFullYear(today.getFullYear() + 5);
@@ -114,10 +409,6 @@ function page1() {
 
     console.log("-> Starting form fill and validation...");
 
-    // =========================
-    // Step 1: Basic info
-    // =========================
-
     const fillBasicInfo = () => {
       setInputValueById("firstName", "Amtel");
       setInputValueById("middleName", "Amtel");
@@ -126,10 +417,6 @@ function page1() {
       setInputValueById("gender", "1", "change");
       console.log("Step 1: Basic info filled ✅");
     };
-
-    // =========================
-    // Step 2: Identity section
-    // =========================
 
     const openIdentitySection = () => {
       const btn = clickButtonByText("Add New Identity");
@@ -156,10 +443,6 @@ function page1() {
       }
     };
 
-    // =========================
-    // Step 3: Next of kin
-    // =========================
-
     const fillNextOfKinSection = () => {
       setInputValueById("nextkinfname", "Amtel");
       setInputValueById("nextkinsname", "Amtel");
@@ -168,10 +451,6 @@ function page1() {
       setInputValueById("alternativeMsisdn", phoneNumber);
       console.log("Step 3: Next of kin filled ✅");
     };
-
-    // =========================
-    // Step 4: Domain / Zone / Area selection
-    // =========================
 
     const setupLocationSelectors = () => {
       const domainSelect = document.getElementById("mdomain");
@@ -226,12 +505,10 @@ function page1() {
 
       const { domainSelect, zoneSelect, areaSelect } = selects;
 
-      // 1. Select domain
       domainSelect.value = TARGET_DOMAIN;
       dispatchAllChangeEvents(domainSelect);
       console.log("4.1 Domain selected.");
 
-      // 2. Poll for zone, then area
       pollForOption(zoneSelect, TARGET_ZONE, "4.2 Zone", () => {
         console.log("Zone selection complete. Polling for area...");
         pollForOption(areaSelect, TARGET_AREA, "4.3 Area", () => {
@@ -257,29 +534,24 @@ function page1() {
       }
     };
 
-    // =========================
-    // Run all steps
-    // =========================
-
     fillBasicInfo();
-    if (!openIdentitySection()) {
-      return; // If identity cannot be opened, stop early
-    }
+    if (!openIdentitySection()) return;
     fillIdentitySection();
     fillNextOfKinSection();
     selectLocationWithPolling();
   }
 
+  // Reset ICCID state on new session
+  iccidPromptProvided = false;
+  iccidUiConfirmed = false;
+  gloable_icc_id = null;
+
   fillFormFromConsole();
 }
 
 async function page2() {
-  // simple wait helper
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-  // -----------------------------------------
-  // 1. PREPAID CHECKBOX
-  // -----------------------------------------
   function checkPrepaidCheckbox() {
     const checkbox = document.getElementById("isprepaid");
     if (!checkbox) {
@@ -293,19 +565,15 @@ async function page2() {
     console.log("Prepaid checkbox checked ✅");
   }
 
-  checkPrepaidCheckbox(); // MUST RUN BEFORE ATTACH PLAN
-  await wait(1000); // give UI 1s to react
+  checkPrepaidCheckbox();
+  await wait(1000);
 
-  // -----------------------------------------
-  // Click ICCID RADIO
-  // -----------------------------------------
   function selectIccidRadio() {
     const radio = document.getElementById("iccid");
     if (!radio) {
       console.warn("ICCID radio not found.");
       return false;
     }
-
     radio.checked = true;
     ["click", "input", "change"].forEach((evt) =>
       radio.dispatchEvent(new Event(evt, { bubbles: true }))
@@ -319,10 +587,7 @@ async function page2() {
     return;
   }
 
-  // -----------------------------------------
-  // 2. ATTACH PLAN (WAIT UNTIL COMPLETED)
-  // -----------------------------------------
-async function clickAddAttachPlan() {
+  async function clickAddAttachPlan() {
     const addIcon = [
       ...document.querySelectorAll("button.btn-info .material-icons"),
     ].find((span) => span.textContent.trim() === "add");
@@ -334,9 +599,8 @@ async function clickAddAttachPlan() {
 
     const addBtn = addIcon.closest("button");
     addBtn.click();
+    await wait(1000);
 
-      await wait(1000)
-    // Wait for modal - reduced from 40x100ms (4s) to 20x50ms (1s)
     let modal = null;
     for (let i = 0; i < 20; i++) {
       modal = document.querySelector(".modal-content");
@@ -347,9 +611,8 @@ async function clickAddAttachPlan() {
       console.warn("Product Catalog modal did not load.");
       return false;
     }
-    
-    await wait(1000)
-    // Find Base Plan - reduced from 40x100ms (4s) to 15x50ms (750ms)
+
+    await wait(1000);
     let basePlan = null;
     for (let i = 0; i < 15; i++) {
       basePlan = [...modal.querySelectorAll(".card-container")].find(
@@ -365,10 +628,9 @@ async function clickAddAttachPlan() {
       return false;
     }
 
-    await wait(1000)
+    await wait(1000);
     basePlan.click();
 
-    // Save button - reduced from 40x100ms (4s) to 15x50ms (750ms)
     let saveBtn = null;
     for (let i = 0; i < 15; i++) {
       saveBtn = modal.querySelector("button.btn.btn-info.mx-2");
@@ -376,14 +638,11 @@ async function clickAddAttachPlan() {
       await wait(50);
     }
 
-    if (!saveBtn) {
-      return false;
-    }
+    if (!saveBtn) return false;
 
-    await wait(100); // reduced from 200ms to 100ms
+    await wait(100);
     saveBtn.click();
 
-    // Wait for modal to close - reduced from 40x100ms (4s) to 20x50ms (1s)
     for (let i = 0; i < 20; i++) {
       if (!document.querySelector(".modal-content")) break;
       await wait(50);
@@ -391,29 +650,23 @@ async function clickAddAttachPlan() {
 
     console.log("Plan Attached");
     return true;
-}
-
+  }
 
   const attachDone = await clickAddAttachPlan();
   if (!attachDone) {
     console.error("Attach plan failed. Stopping Page2.");
     return;
   }
-  await wait(500); // pause before MSISDN
+  await wait(500);
 
-  // -----------------------------------------
-  // 3. ADD MSISDN SERIES (AFTER ATTACH PLAN)
-  // -----------------------------------------
   async function addMsisdnSeries() {
-    // small wait helper
     const wait = (ms) => new Promise((res) => setTimeout(res, ms));
 
-    // find all "add" icon buttons once
     const addIcons = [
       ...document.querySelectorAll("button.btn-info .material-icons"),
     ].filter((s) => s.textContent.trim() === "add");
 
-    const addBtn = addIcons[1]?.closest("button"); // index 1 = MSISDN
+    const addBtn = addIcons[1]?.closest("button");
     if (!addBtn) {
       console.warn("MSISDN Add button not found.");
       return false;
@@ -421,7 +674,6 @@ async function clickAddAttachPlan() {
 
     addBtn.click();
 
-    // wait for the specific MSISDN modal
     let modal = null;
     for (let i = 0; i < 25; i++) {
       modal = [...document.querySelectorAll(".modal-content")].find((m) =>
@@ -435,30 +687,34 @@ async function clickAddAttachPlan() {
       return false;
     }
 
-    // ------------------------------------
-    //   Select the 10th checkbox instead of the 1st
-    // ------------------------------------
     const checkboxes = [
-      ...modal.querySelectorAll(
-        'table input.form-check-input[type="checkbox"]'
-      ),
+      ...modal.querySelectorAll('table input.form-check-input[type="checkbox"]'),
     ];
 
     if (checkboxes.length < 10) {
-      console.warn(
-        `Only ${checkboxes.length} MSISDN rows available — cannot select the 10th.`
-      );
+      console.warn(`Only ${checkboxes.length} MSISDN rows — cannot select 10th.`);
       return false;
     }
 
-    const tenth = checkboxes[9]; // index 9 = 10th checkbox
-
+    const tenth = checkboxes[9];
     tenth.checked = true;
     ["click", "input", "change"].forEach((t) =>
       tenth.dispatchEvent(new Event(t, { bubbles: true }))
     );
 
-    // save button
+    const msisdnRow = tenth.closest('tr');
+    if (msisdnRow) {
+      const msisdnCell =
+        msisdnRow.cells[1] ||
+        msisdnRow.querySelector('td:nth-child(2)') ||
+        msisdnRow.querySelector('td');
+
+      if (msisdnCell) {
+        gloable_msisdn = msisdnCell.textContent.trim().replace(/\D/g, '');
+        console.log("📱 Auto-captured MSISDN:", gloable_msisdn);
+      }
+    }
+
     const saveBtn = modal.querySelector("button.btn.btn-info.mx-2");
     if (!saveBtn) {
       console.warn("MSISDN save button missing.");
@@ -469,7 +725,6 @@ async function clickAddAttachPlan() {
     saveBtn.click();
     console.log("MSISDN Done.");
 
-    // wait for modal to close
     for (let i = 0; i < 25; i++) {
       const stillOpen = [...document.querySelectorAll(".modal-content")].some(
         (m) => m.textContent.includes("MSISDN List")
@@ -486,18 +741,13 @@ async function clickAddAttachPlan() {
     console.error("MSISDN failed. Stopping Page2.");
     return;
   }
-  await wait(1000); // pause before ICCID
-
-  // -----------------------------------------
-  // 4. ICCID MODAL
-  // -----------------------------------------
+  await wait(1000);
 
   async function handle_ICCID() {
-    // reuse icon list so indexes are stable
     const addIcons = [
       ...document.querySelectorAll("button.btn.btn-info .material-icons"),
     ].filter((s) => s.textContent.trim() === "add");
-    const addBtn = addIcons[2]?.closest("button"); // index 2 = ICCID
+    const addBtn = addIcons[2]?.closest("button");
     if (!addBtn) {
       console.warn("ICCID Add button not found.");
       return false;
@@ -505,7 +755,6 @@ async function clickAddAttachPlan() {
 
     addBtn.click();
 
-    // wait for IMSI/ICCID modal
     let modal = null;
     for (let i = 0; i < 25; i++) {
       modal = [...document.querySelectorAll(".modal-content")].find((m) =>
@@ -519,276 +768,211 @@ async function clickAddAttachPlan() {
       return false;
     }
 
-    const suffix = prompt("Enter ICCID suffix (e.g. 8925263790000-XXXXXXX):");
-    if (!suffix) return false;
-
-    // Auto-prefix the full ICCID
-    const ICCID_number = `8925263790000${suffix}`;
-    console.log(`🔍 Searching ICCID: ${ICCID_number}`);
-    if (!ICCID_number) {
-      console.warn("No IMSI ICCID_number entered.");
+    const suffix = prompt("Enter ICCID suffix (e.g. -1234567):");
+    if (!suffix || suffix.trim() === '') {
+      alert("ICCID is required!");
       return false;
     }
 
-    saveIccid(ICCID_number);  // ← Add the logging here
-    gloable_icc_id = ICCID_number
-    
-
-    const searchInput = modal.querySelector(
-      "input#searchtextIMSI.form-control"
-    );
-    if (!searchInput) {
-      console.warn("ICCID search input not found.");
+    const cleanSuffix = suffix.replace(/^-/, '').trim();
+    const ICCID_number = `8925263790000${cleanSuffix}`;
+    if (!/^\d{19,20}$/.test(ICCID_number)) {
+      alert("Invalid ICCID format.");
       return false;
     }
+
+    const searchInput = modal.querySelector("input#searchtextIMSI.form-control");
+    const searchButton = modal.querySelector(".input-group-append button.btn.btn-info");
+    if (!searchInput || !searchButton) {
+      console.warn("ICCID search field/button not found.");
+      return false;
+    }
+
     searchInput.value = ICCID_number;
     ["input", "change", "keyup"].forEach((e) =>
       searchInput.dispatchEvent(new Event(e, { bubbles: true }))
     );
-
-    const searchButton = modal.querySelector(
-      ".input-group-append button.btn.btn-info"
-    );
-    if (!searchButton) {
-      console.warn("ICCID search button not found.");
-      return false;
-    }
     searchButton.click();
 
-    await wait(1000)
-    
-    console.log("ICCID done.");
+    await wait(1200);
+
+    // Close modal
+    const closeBtn = modal.querySelector(".close") || modal.querySelector("button.btn-secondary");
+    if (closeBtn) closeBtn.click();
+    await wait(800);
+
+    // 🔍 Validate via UI
+    if (detectIccidInUi(ICCID_number)) {
+      gloable_icc_id = ICCID_number;
+      iccidPromptProvided = true;
+      iccidUiConfirmed = true;
+      saveIccid(ICCID_number, { msisdn: gloable_msisdn });
+      console.log("✅ ICCID confirmed in UI.");
+    } else {
+      gloable_icc_id = null;
+      iccidPromptProvided = false;
+      iccidUiConfirmed = false;
+      alert("⚠️ ICCID not detected in UI after selection.");
+      return false;
+    }
+
     return true;
   }
 
-  
   const iccidDone = await handle_ICCID();
   if (!iccidDone) {
     console.error("ICCID step failed. Stopping Page2.");
     return;
   }
   await wait(1000);
-
-  
-  
-
-
 }
 
-// -----------------------------------------
-  // 5. NAVIGATION: NEXT → PAGE 3 → PAGE 4
-  // -----------------------------------------
-  async function goToNextOnce(label = "Next") {
-    let btn = null;
-    for (let i = 0; i < 30; i++) {
-      btn = [...document.querySelectorAll("button.btn.btn-info")].find(
-        (b) => b.textContent.trim().toLowerCase() === label.toLowerCase()
-      );
-      if (btn) break;
-      await wait(150);
-    }
-    if (!btn) {
-      console.warn(`${label} button not found.`);
-      return false;
-    }
-    btn.click();
-    console.log(`${label} clicked.`);
-    await wait(700);
-    return true;
+async function next() {
+  // 🔒 BLOCK if ICCID not fully confirmed
+  if (!iccidPromptProvided || !iccidUiConfirmed || !gloable_icc_id) {
+    alert("❌ ICCID not fully confirmed! Please complete Page 2 properly.");
+    console.error("next() blocked: ICCID missing or not accepted by UI.");
+    return;
   }
 
-async function next() {
   const wait = (ms) => new Promise(res => setTimeout(res, ms));
 
-  // Button clicker
   async function clickButton(label, timeout = 6000) {
     const start = performance.now();
     let btn = null;
-
     while (performance.now() - start < timeout) {
       btn = [...document.querySelectorAll("button")]
         .find(b => b.textContent.trim().toLowerCase() === label.toLowerCase());
-
       if (btn) break;
       await wait(150);
     }
-
     if (!btn) {
       console.warn(`Button "${label}" not found.`);
       return false;
     }
-
     btn.click();
     console.log(`Clicked: ${label}`);
     await wait(700);
     return true;
   }
 
-  // ===========================================
-  // Normal steps WITH await
-  // ===========================================
-  await clickButton("Next");      // page 2 → 3
-  await clickButton("Next");      // page 3 → 4
-   await wait(1000);
-  await clickButton("Checkout");  // checkout
-   await wait(1000);
-  // ===========================================
-  // Close modal (WITH await, same as before)
-  // ===========================================
+  await clickButton("Next");
+  await clickButton("Next");
+  await wait(1000);
+  await clickButton("Checkout");
+  await wait(1000);
+
   async function closeModal(timeout = 8000) {
     const start = performance.now();
     let closeBtn = null;
-
     while (performance.now() - start < timeout) {
       closeBtn = [...document.querySelectorAll("button.btn.btn-small.btn-info")]
         .find(b => b.textContent.trim().toLowerCase() === "close");
-
       if (closeBtn) break;
       await wait(200);
     }
-
     if (closeBtn) {
       closeBtn.click();
       console.log("Modal closed.");
       await wait(500);
     }
   }
-  
 
-  
-  await wait(1000); // 🔥 wait 1 second before close modal
+  await wait(1000);
   await closeModal();
 
-  // ===========================================
-  // Copy to Clipboard
-  // ===========================================
   function copyToClipboard(value) {
-  const text = String(value);
-
-  const textarea = document.createElement("textarea");
-  textarea.value = text;
-  textarea.style.position = "fixed";
-  textarea.style.top = "-999px";
-
-  document.body.appendChild(textarea);
-  textarea.focus();
-  textarea.select();
-
-  try {
-    document.execCommand("copy");
-    console.log("✅ COPIED:", text);
-  } catch (err) {
-    console.error("❌ Copy failed:", err);
+    const text = String(value);
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.style.position = "fixed";
+    textarea.style.top = "-999px";
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    try {
+      document.execCommand("copy");
+      console.log("✅ COPIED:", text);
+    } catch (err) {
+      console.error("❌ Copy failed:", err);
+    }
+    document.body.removeChild(textarea);
   }
 
-  document.body.removeChild(textarea);
-}
   console.log(gloable_icc_id);
   copyToClipboard(gloable_icc_id);
 
-  
-  // ===========================================
-  // Acitivate 
-  // ===========================================
-// Click home logo
-function clickHomeLogo() {
-  const logo = document.querySelector("img.logoImg");
-  if (logo) {
-    logo.click();
-    console.log("Home logo clicked.");
-  } else {
-    console.warn("Home logo not found.");
-  }
-}
-
-// Select ICCID from dropdown
-function selectICCID() {
-  const select = document.querySelector("select#idtype");
-  if (!select) {
-    console.warn("Dropdown not found.");
-    return;
+  function clickHomeLogo() {
+    const logo = document.querySelector("img.logoImg");
+    if (logo) {
+      logo.click();
+      console.log("Home logo clicked.");
+    } else {
+      console.warn("Home logo not found.");
+    }
   }
 
-  const option = [...select.options].find(
-    opt => opt.textContent.trim().toLowerCase() === "iccid"
-  );
-
-  if (!option) {
-    console.warn("ICCID option not found.");
-    return;
-  }
-
-  select.value = option.value;
-  select.dispatchEvent(new Event("change"));
-  console.log("Dropdown changed to ICCID.");
-}
-
-function fillSearchBar() {
-  const input = document.querySelector("input#number");
-
-  if (!input) {
-    console.warn("Search bar not found.");
-    return;
-  }
-
-  input.value = gloable_icc_id;
-  input.dispatchEvent(new Event("input", { bubbles: true }));
-
-  console.log("Search bar filled with:", gloable_icc_id);
-}
-  function clickSearchButton() {
-  const searchBtn = [...document.querySelectorAll("button.btn.btn-info")]
-    .find(btn =>
-      btn.textContent.trim().toLowerCase().includes("search")
+  function selectICCID() {
+    const select = document.querySelector("select#idtype");
+    if (!select) {
+      console.warn("Dropdown not found.");
+      return;
+    }
+    const option = [...select.options].find(
+      opt => opt.textContent.trim().toLowerCase() === "iccid"
     );
-
-  if (!searchBtn) {
-    console.warn("Search button not found.");
-    return;
+    if (!option) {
+      console.warn("ICCID option not found.");
+      return;
+    }
+    select.value = option.value;
+    select.dispatchEvent(new Event("change"));
+    console.log("Dropdown changed to ICCID.");
   }
 
-  searchBtn.click();
-  console.log("Search button clicked.");
-}
+  function fillSearchBar() {
+    const input = document.querySelector("input#number");
+    if (!input) {
+      console.warn("Search bar not found.");
+      return;
+    }
+    input.value = gloable_icc_id;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    console.log("Search bar filled with:", gloable_icc_id);
+  }
+
+  function clickSearchButton() {
+    const searchBtn = [...document.querySelectorAll("button.btn.btn-info")]
+      .find(btn => btn.textContent.trim().toLowerCase().includes("search"));
+    if (!searchBtn) {
+      console.warn("Search button not found.");
+      return;
+    }
+    searchBtn.click();
+    console.log("Search button clicked.");
+  }
 
   async function clickActivateButton(timeout = 8000) {
-  const start = performance.now();
-  let activateBtn = null;
-
-  while (performance.now() - start < timeout) {
-    activateBtn = [...document.querySelectorAll("span.material-icons.green")]
-      .find(el => el.textContent.trim() === "check_circle");
-
-    if (activateBtn) break;
-
-    await new Promise(res => setTimeout(res, 200));
+    const start = performance.now();
+    let activateBtn = null;
+    while (performance.now() - start < timeout) {
+      activateBtn = [...document.querySelectorAll("span.material-icons.green")]
+        .find(el => el.textContent.trim() === "check_circle");
+      if (activateBtn) break;
+      await new Promise(res => setTimeout(res, 200));
+    }
+    if (!activateBtn) {
+      console.warn("Activate button not found.");
+      return;
+    }
+    activateBtn.click();
+    console.log("Activate button clicked.");
   }
 
-  if (!activateBtn) {
-    console.warn("Activate button not found.");
-    return;
-  }
-
-  activateBtn.click();
-  console.log("Activate button clicked.");
+  await wait(1000);
+  clickHomeLogo();
+  selectICCID();
+  fillSearchBar();
+  clickSearchButton();
+  await clickActivateButton();
 }
-  
-await wait(1000);
-clickHomeLogo();
-selectICCID();
-fillSearchBar();
-clickSearchButton();
-await clickActivateButton();
-
- 
-
-}
-
-
-
-
-// to RUN write
-// page1()
-// than
-// page2()
-// next()
