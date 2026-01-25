@@ -768,18 +768,46 @@ async function page2() {
       return false;
     }
 
-    const suffix = prompt("Enter ICCID suffix (e.g. -1234567):");
-    if (!suffix || suffix.trim() === '') {
-      alert("ICCID is required!");
-      return false;
-    }
+// =========================================
+// 🔁 AUTO-RETRY ON INVALID ICCID (inside handle_ICCID)
+// =========================================
 
-    const cleanSuffix = suffix.replace(/^-/, '').trim();
-    const ICCID_number = `8925263790000${cleanSuffix}`;
-    if (!/^\d{19,20}$/.test(ICCID_number)) {
-      alert("Invalid ICCID format.");
+let attempt = 0;
+const MAX_ATTEMPTS = 3;
+let ICCID_number = null;
+
+while (attempt < MAX_ATTEMPTS) {
+  const suffix = prompt(
+    `Enter ICCID suffix (e.g. -1234567)\nAttempt ${attempt + 1}/${MAX_ATTEMPTS}:`
+  );
+
+  if (!suffix || suffix.trim() === '') {
+    attempt++;
+    if (attempt >= MAX_ATTEMPTS) {
+      alert("❌ Max attempts reached. ICCID selection aborted.");
       return false;
     }
+    continue; // retry
+  }
+
+  const cleanSuffix = suffix.replace(/^-/, '').trim();
+  ICCID_number = `8925263790000${cleanSuffix}`;
+
+  if (/^\d{19,20}$/.test(ICCID_number)) {
+    break; // ✅ valid — exit loop
+  } else {
+    attempt++;
+    if (attempt >= MAX_ATTEMPTS) {
+      alert("❌ Invalid ICCID format after 3 attempts. Aborting.");
+      return false;
+    }
+    alert(`⚠️ Invalid ICCID format. Must be 19–20 digits. Try again.`);
+    // loop continues
+  }
+}
+
+// If we reach here, ICCID_number is valid
+console.log("✅ Valid ICCID entered:", ICCID_number);
 
     const searchInput = modal.querySelector("input#searchtextIMSI.form-control");
     const searchButton = modal.querySelector(".input-group-append button.btn.btn-info");
