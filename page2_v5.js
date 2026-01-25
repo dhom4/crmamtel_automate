@@ -1,5 +1,5 @@
 // =========================================
-// ENHANCED ICCID LOGGER — COMPLETE VERSION
+// ENHANCED ICCID LOGGER — FINAL FIXED VERSION (NO SOUND, 7-DIGIT VALIDATION)
 // =========================================
 
 let gloable_icc_id = null;
@@ -75,7 +75,7 @@ function clearAllLogs() {
   }
 }
 
-// --- Export to CSV (simplified per your request) ---
+// --- Export to CSV ---
 function download_log() {
   if (!iccidLog.length) {
     alert("No logs to export.");
@@ -121,7 +121,7 @@ function download_log() {
   URL.revokeObjectURL(url);
 }
 
-// --- Detect ICCID in UI after selection ---
+// --- Detect ICCID in UI ---
 function detectIccidInUi(expectedIccid) {
   if (!expectedIccid) return false;
 
@@ -149,7 +149,39 @@ function detectIccidInUi(expectedIccid) {
   return bodyText.includes(expectedIccid) || bodyText.endsWith(expectedIccid.slice(-8));
 }
 
-// --- AUTO-CLEAR LOGS OLDER THAN 30 DAYS ---
+// --- Get valid 7-digit ICCID suffix with retry ---
+async function getValidIccidSuffix(initialMessage = "Enter ICCID suffix (7 digits):") {
+  const MAX_ATTEMPTS = 3;
+  let attempt = 0;
+
+  while (attempt < MAX_ATTEMPTS) {
+    const suffix = prompt(
+      `${initialMessage}\nAttempt ${attempt + 1}/${MAX_ATTEMPTS}:`
+    );
+
+    if (suffix === null) {
+      return null; // User clicked Cancel
+    }
+
+    const clean = suffix.replace(/\D/g, ''); // Remove all non-digits
+    if (clean.length === 7) {
+      return clean;
+    }
+
+    attempt++;
+    if (attempt >= MAX_ATTEMPTS) {
+      alert(`❌ Max attempts (${MAX_ATTEMPTS}) reached.\nExpected 7 digits, got "${clean}" (${clean.length} digits).`);
+      return null;
+    }
+
+    alert(
+      `⚠️ Invalid input!\nYou entered: "${suffix}"\nCleaned to: "${clean}" (${clean.length} digits)\nPlease enter exactly 7 digits.`
+    );
+  }
+  return null;
+}
+
+// --- AUTO-CLEAR OLD LOGS ---
 function clearOldLogs() {
   const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
   const cutoff = Date.now() - THIRTY_DAYS;
@@ -165,102 +197,65 @@ function clearOldLogs() {
     console.log(`🧹 Cleared ${originalCount - iccidLog.length} old logs.`);
   }
 }
-clearOldLogs(); // Run on load
+clearOldLogs();
 
-// --- GENERATE ACTIVATION REPORT ---
+// --- GENERATE REPORT ---
+// --- GENERATE DAILY ACTIVATION REPORT ---
 function generateActivationReport() {
   if (!iccidLog.length) {
     alert("No logs to report.");
     return;
   }
 
-  const now = new Date();
-  const todayStr = `${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()}`;
+  // Group logs by date (DD/MM/YYYY)
+  const dailyCounts = {};
+  for (const entry of iccidLog) {
+    // Extract DD/MM/YYYY from timestamp
+    const d = new Date(entry.timestamp);
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    const dateKey = `${day}/${month}/${year}`;
+
+    dailyCounts[dateKey] = (dailyCounts[dateKey] || 0) + 1;
+  }
+
+  // Sort dates (newest first)
+  const sortedDates = Object.keys(dailyCounts).sort((a, b) => {
+    const [aDay, aMonth, aYear] = a.split('/');
+    const [bDay, bMonth, bYear] = b.split('/');
+    return new Date(bYear, bMonth - 1, bDay) - new Date(aYear, aMonth - 1, aDay);
+  });
+
+  // Build report
   const total = iccidLog.length;
-  const todayLogs = iccidLog.filter(e => 
-    e.timeDisplay.includes(todayStr.split('/')[0]) && 
-    e.timeDisplay.includes(`/${todayStr.split('/')[1]}/`)
-  ).length;
-
-  const report = [
-    `ICCID ACTIVATION REPORT`,
-    `=======================`,
-    `Total Logs: ${total}`,
-    `Today's Activations: ${todayLogs}`,
-    `Oldest Log: ${iccidLog[0].timeDisplay}`,
-    `Latest Log: ${iccidLog[iccidLog.length - 1].timeDisplay}`,
+  const lines = [
+    `ICCID DAILY ACTIVATION REPORT`,
+    `============================`,
+    `Total Activations: ${total}`,
     ``,
-    `Recent Entries (last 5):`,
-    ...iccidLog.slice(-5).map(e => 
-      `${e.timeDisplay} | ${e.iccid} | ${e.msisdn}`
-    )
-  ].join('\n');
+    `Daily Breakdown:`
+  ];
 
+  for (const date of sortedDates) {
+    lines.push(`${date}: ${dailyCounts[date]} activation(s)`);
+  }
+
+  const report = lines.join('\n');
+
+  // Download as .txt
   const blob = new Blob([report], { type: 'text/plain' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `ICCID-Report-${todayStr.replace(/\//g, '-')}.txt`;
+  a.download = `ICCID-Daily-Report-${new Date().toISOString().split('T')[0]}.txt`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
 
-// --- SOUND & ALERTS ---
-function playSound(type) {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    if (type === 'success') {
-      osc.frequency.value = 800;
-      gain.gain.value = 0.1;
-      osc.start();
-      setTimeout(() => osc.stop(), 200);
-    } else if (type === 'error') {
-      osc.frequency.value = 200;
-      gain.gain.value = 0.1;
-      osc.start();
-      setTimeout(() => {
-        osc.frequency.value = 150;
-        setTimeout(() => osc.stop(), 100);
-      }, 100);
-    }
-  } catch (e) {
-    console.warn("Sound not supported");
-  }
-}
-
-// Enhance saveIccid with sound
-const originalSaveIccid = saveIccid;
-saveIccid = function(iccid, options = {}) {
-  const result = originalSaveIccid(iccid, options);
-  if (result) {
-    playSound('success');
-    if ('Notification' in window && Notification.permission === 'granted') {
-      new Notification('✅ ICCID Logged', { body: iccid, silent: true });
-    }
-  }
-  return result;
-};
-
-// Enhance alert with error sound
-const originalAlert = window.alert;
-window.alert = function(msg) {
-  if (msg.includes('Duplicate') || msg.includes('required') || msg.includes('Invalid') || msg.includes('not found')) {
-    playSound('error');
-  }
-  originalAlert(msg);
-};
-
-if ('Notification' in window && Notification.permission === 'default') {
-  Notification.requestPermission();
-}
-
-// --- RETRY ICCID SELECTION FUNCTION ---
+// --- RETRY FUNCTION ---
 async function retryIccidSelection() {
   console.log("🔁 Retrying ICCID selection...");
   iccidPromptProvided = false;
@@ -288,23 +283,17 @@ async function retryIccidSelection() {
     return false;
   }
 
-  const suffix = prompt("Re-enter ICCID suffix (e.g. -1234567):");
-  if (!suffix || suffix.trim() === '') {
-    alert("ICCID is required!");
+  // Get valid 7-digit suffix with retry
+  const cleanSuffix = await getValidIccidSuffix("Re-enter ICCID suffix (7 digits):");
+  if (!cleanSuffix) {
     return false;
   }
-
-  const cleanSuffix = suffix.replace(/^-/, '').trim();
   const ICCID_number = `8925263790000${cleanSuffix}`;
-  if (!/^\d{19,20}$/.test(ICCID_number)) {
-    alert("Invalid ICCID format.");
-    return false;
-  }
 
   const searchInput = modal.querySelector("input#searchtextIMSI.form-control");
   const searchButton = modal.querySelector(".input-group-append button.btn.btn-info");
   if (!searchInput || !searchButton) {
-    alert("Search field not found in modal.");
+    alert("Search field not found.");
     return false;
   }
 
@@ -331,7 +320,7 @@ async function retryIccidSelection() {
   }
 }
 
-// --- Expose functions globally ---
+// --- Expose functions ---
 window.saveIccid = saveIccid;
 window.deleteLog = deleteLog;
 window.clearAllLogs = clearAllLogs;
@@ -341,11 +330,9 @@ window.retryIccidSelection = retryIccidSelection;
 window.iccidLog = iccidLog;
 
 // =========================================
-// YOUR PAGE1 / PAGE2 / NEXT CODE (MINIMALLY MODIFIED)
+// PAGE1
 // =========================================
-
 function page1() {
-  // ... [your existing page1 code unchanged] ...
   function fillFormFromConsole() {
     const formatDate = (date) => {
       const year = date.getFullYear();
@@ -541,7 +528,6 @@ function page1() {
     selectLocationWithPolling();
   }
 
-  // Reset ICCID state on new session
   iccidPromptProvided = false;
   iccidUiConfirmed = false;
   gloable_icc_id = null;
@@ -549,6 +535,9 @@ function page1() {
   fillFormFromConsole();
 }
 
+// =========================================
+// PAGE2
+// =========================================
 async function page2() {
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -743,6 +732,9 @@ async function page2() {
   }
   await wait(1000);
 
+  // =========================================
+  // HANDLE ICCID — WITH 7-DIGIT VALIDATION
+  // =========================================
   async function handle_ICCID() {
     const addIcons = [
       ...document.querySelectorAll("button.btn.btn-info .material-icons"),
@@ -768,46 +760,13 @@ async function page2() {
       return false;
     }
 
-// =========================================
-// 🔁 AUTO-RETRY ON INVALID ICCID (inside handle_ICCID)
-// =========================================
-
-let attempt = 0;
-const MAX_ATTEMPTS = 3;
-let ICCID_number = null;
-
-while (attempt < MAX_ATTEMPTS) {
-  const suffix = prompt(
-    `Enter ICCID suffix (e.g. -1234567)\nAttempt ${attempt + 1}/${MAX_ATTEMPTS}:`
-  );
-
-  if (!suffix || suffix.trim() === '') {
-    attempt++;
-    if (attempt >= MAX_ATTEMPTS) {
-      alert("❌ Max attempts reached. ICCID selection aborted.");
+    // Get valid 7-digit suffix with retry
+    const cleanSuffix = await getValidIccidSuffix("Enter ICCID suffix (7 digits) 8925263790000xxxxxx");
+    if (!cleanSuffix) {
       return false;
     }
-    continue; // retry
-  }
-
-  const cleanSuffix = suffix.replace(/^-/, '').trim();
-  ICCID_number = `8925263790000${cleanSuffix}`;
-
-  if (/^\d{19,20}$/.test(ICCID_number)) {
-    break; // ✅ valid — exit loop
-  } else {
-    attempt++;
-    if (attempt >= MAX_ATTEMPTS) {
-      alert("❌ Invalid ICCID format after 3 attempts. Aborting.");
-      return false;
-    }
-    alert(`⚠️ Invalid ICCID format. Must be 19–20 digits. Try again.`);
-    // loop continues
-  }
-}
-
-// If we reach here, ICCID_number is valid
-console.log("✅ Valid ICCID entered:", ICCID_number);
+    const ICCID_number = `8925263790000${cleanSuffix}`;
+    console.log("✅ Valid ICCID entered:", ICCID_number);
 
     const searchInput = modal.querySelector("input#searchtextIMSI.form-control");
     const searchButton = modal.querySelector(".input-group-append button.btn.btn-info");
@@ -824,12 +783,10 @@ console.log("✅ Valid ICCID entered:", ICCID_number);
 
     await wait(1200);
 
-    // Close modal
     const closeBtn = modal.querySelector(".close") || modal.querySelector("button.btn-secondary");
     if (closeBtn) closeBtn.click();
     await wait(800);
 
-    // 🔍 Validate via UI
     if (detectIccidInUi(ICCID_number)) {
       gloable_icc_id = ICCID_number;
       iccidPromptProvided = true;
@@ -855,8 +812,10 @@ console.log("✅ Valid ICCID entered:", ICCID_number);
   await wait(1000);
 }
 
+// =========================================
+// NEXT
+// =========================================
 async function next() {
-  // 🔒 BLOCK if ICCID not fully confirmed
   if (!iccidPromptProvided || !iccidUiConfirmed || !gloable_icc_id) {
     alert("❌ ICCID not fully confirmed! Please complete Page 2 properly.");
     console.error("next() blocked: ICCID missing or not accepted by UI.");
