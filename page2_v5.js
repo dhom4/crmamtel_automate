@@ -24,6 +24,19 @@ function isDuplicate(iccid) {
   return iccidLog.some(entry => entry.iccid === iccid);
 }
 
+// Check if MSISDN was used in the last 2 days
+function isMsisdnUsedRecently(msisdn, maxDays = 2) {
+  const now = Date.now();
+  const cutoff = now - (maxDays * 24 * 60 * 60 * 1000); // 2 days in ms
+
+  return iccidLog.some(entry => {
+    if (entry.msisdn !== msisdn) return false;
+    
+    const entryTime = new Date(entry.timestamp).getTime();
+    return entryTime >= cutoff; // only recent entries
+  });
+}
+
 // --- Main logging function ---
 function saveIccid(iccid, options = {}) {
   if (!iccid || typeof iccid !== 'string') {
@@ -136,23 +149,7 @@ async function getValidIccidSuffix(initialMessage = "Enter ICCID suffix (7 digit
   return null;
 }
 
-// --- AUTO-CLEAR OLD LOGS ---
-function clearOldLogs() {
-  const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
-  const cutoff = Date.now() - THIRTY_DAYS;
-  const originalCount = iccidLog.length;
-  
-  iccidLog = iccidLog.filter(entry => {
-    const entryTime = new Date(entry.timestamp).getTime();
-    return entryTime >= cutoff;
-  });
 
-  if (iccidLog.length < originalCount) {
-    saveLog();
-    console.log(`🧹 Cleared ${originalCount - iccidLog.length} old logs.`);
-  }
-}
-clearOldLogs();
 
 // --- GENERATE REPORT ---
 // --- GENERATE DAILY ACTIVATION REPORT ---
@@ -196,41 +193,41 @@ function generateActivationReport(format = 'detailed') {
     filename = `ICCID-Simple-${new Date().toISOString().split('T')[0]}.txt`;
 
   } else if (format === 'csv') {
- // ✅ MATCH download_log() EXACTLY
+    // ✅ MATCH download_log() EXACTLY
 
-  function formatDateDisplay(dateStr) {
-    const d = new Date(dateStr);
-    const day = String(d.getDate()).padStart(2, '0');
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const year = d.getFullYear();
-    const hours = String(d.getHours()).padStart(2, '0');
-    const minutes = String(d.getMinutes()).padStart(2, '0');
-    const seconds = String(d.getSeconds()).padStart(2, '0');
-    return {
-      date: `${day}/${month}/${year}`,
-      time: `${hours}:${minutes}:${seconds}`
-    };
-  }
+    function formatDateDisplay(dateStr) {
+      const d = new Date(dateStr);
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const year = d.getFullYear();
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      const seconds = String(d.getSeconds()).padStart(2, '0');
+      return {
+        date: `${day}/${month}/${year}`,
+        time: `${hours}:${minutes}:${seconds}`
+      };
+    }
 
-  const headers = ['Date', 'Time', 'ICCID', 'MSISDN', 'Notes'];
-  const rows = iccidLog.map(e => {
-    const { date, time } = formatDateDisplay(e.timestamp);
-    // ✅ EXACT same format as download_log(): no quotes, no escaping
-    return [
-      date,
-      time,
-      e.iccid,        // 7-digit suffix only
-      e.msisdn,       // clean (no 252)
-      ''              // empty Notes
-    ].join(',');
-  });
+    const headers = ['Date', 'Time', 'ICCID', 'MSISDN', 'Notes'];
+    const rows = iccidLog.map(e => {
+      const { date, time } = formatDateDisplay(e.timestamp);
+      // ✅ EXACT same format as download_log(): no quotes, no escaping
+      return [
+        date,
+        time,
+        e.iccid,        // 7-digit suffix only
+        e.msisdn,       // clean (no 252)
+        ''              // empty Notes
+      ].join(',');
+    });
 
-  content = [headers.join(','), ...rows].join('\n');
-  filename = `ICCID-Export-${new Date().toISOString().split('T')[0]}.csv`;
-  type = 'text/csv';
+    content = [headers.join(','), ...rows].join('\n');
+    filename = `ICCID-Export-${new Date().toISOString().split('T')[0]}.csv`;
+    type = 'text/csv';
 
   } else {
-    // Detailed report with error detection + copy blocks
+    // ✅ CLEAN DETAILED REPORT WITH MONTH DIVIDERS (no warnings, no copy blocks)
     const dailyData = {};
     for (const entry of iccidLog) {
       const d = new Date(entry.timestamp);
@@ -249,43 +246,28 @@ function generateActivationReport(format = 'detailed') {
       `ICCID ACTIVATION REPORT`,
       `=====================`,
       `Total Activations: ${iccidLog.length}`,
-      ``
+      ``,
+      `DAILY BREAKDOWN:`
     ];
 
-    lines.push(`DAILY BREAKDOWN:`);
+    let lastMonth = null;
     for (const date of sortedDates) {
+      const [day, month, year] = date.split('/');
+      const monthKey = `${year}-${month}`;
+
+      // ✅ Add divider when month changes
+      if (lastMonth !== null && lastMonth !== monthKey) {
+        lines.push(`\n───────────────`, ``);
+      }
+      lastMonth = monthKey;
+
       const entries = dailyData[date];
-      lines.push(`\n${date} (${entries.length} activation(s)):`);
+      lines.push(`${date} (${entries.length} activation(s)}):`);
       entries.forEach(e => {
         lines.push(`  • ICCID: ${e.iccid} | MSISDN: ${e.msisdn}`);
       });
+      lines.push(``); // blank line after each day
     }
-
-    // Error detection
-    const invalidIccids = iccidLog.filter(e => e.iccid.length !== 7);
-    const invalidMsisdns = iccidLog.filter(e => e.msisdn.length < 9 || e.msisdn.length > 10);
-    
-    if (invalidIccids.length > 0 || invalidMsisdns.length > 0) {
-      lines.push(`\n⚠️  VALIDATION WARNINGS:`);
-      if (invalidIccids.length > 0) {
-        lines.push(`  - ${invalidIccids.length} ICCID(s) not 7 digits:`);
-        invalidIccids.forEach(e => lines.push(`    → ${e.iccid}`));
-      }
-      if (invalidMsisdns.length > 0) {
-        lines.push(`  - ${invalidMsisdns.length} MSISDN(s) invalid length (should be 9-10 digits):`);
-        invalidMsisdns.forEach(e => lines.push(`    → ${e.msisdn}`));
-      }
-    }
-
-    // Copy-paste blocks
-    lines.push(
-      `\n--- COPY-PASTE BLOCKS ---`,
-      `ICCID Suffixes (comma-separated):`,
-      iccidLog.map(e => e.iccid).join(', '),
-      ``,
-      `MSISDNs (newline-separated):`,
-      iccidLog.map(e => e.msisdn).join('\n')
-    );
 
     content = lines.join('\n');
     filename = `ICCID-Report-Complete-${new Date().toISOString().split('T')[0]}.txt`;
@@ -795,8 +777,7 @@ async function addMsisdnSeries() {
     if (rawMsisdn.length < 9) continue;
 
     // ✅ Check if already in your log
-    const isUsed = iccidLog.some(entry => entry.msisdn === rawMsisdn);
-    if (!isUsed) {
+      const isUsed = isMsisdnUsedRecently(rawMsisdn, 2); // last 2 days    if (!isUsed) {
       selectedIdx = idx;
       capturedMsisdn = rawMsisdn;
       break; // Use this one!
@@ -969,25 +950,60 @@ async function next() {
   await clickButton("Next");
   await clickButton("Next");
   await wait(1000);
-  await clickButton("Checkout");
-  await wait(1000);
+  
+await clickButton("Checkout");
+await wait(1500); // Wait a bit longer for modal to fully render
 
-  async function closeModal(timeout = 8000) {
-    const start = performance.now();
-    let closeBtn = null;
-    while (performance.now() - start < timeout) {
-      closeBtn = [...document.querySelectorAll("button.btn.btn-small.btn-info")]
-        .find(b => b.textContent.trim().toLowerCase() === "close");
-      if (closeBtn) break;
-      await wait(200);
-    }
-    if (closeBtn) {
-      closeBtn.click();
-      console.log("Modal closed.");
-      await wait(500);
-    }
+// --- READ POPUP MESSAGE ---
+let popupMessage = null;
+const modal = document.querySelector('.modal-content');
+if (modal) {
+  const msgEl = modal.querySelector('.modal-body > p');
+  if (msgEl) {
+    popupMessage = msgEl.textContent.trim();
+    console.log("📌 Popup message:", popupMessage);
   }
+}
 
+// --- HANDLE MESSAGE: ONLY TWO CASES ---
+if (popupMessage) {
+  // ✅ Case 1: MCASH error = GOOD → continue
+  if (popupMessage.includes("MCASH Request Error")) {
+    console.log("✅ MCASH error — continuing...");
+  }
+  // ❌ Case 2: "has been used" = BAD → clean up and stop
+  else if (popupMessage.includes("has been used")) {
+    console.error("🛑 MSISDN already used:", popupMessage);
+
+    // 🧹 Remove last ICCID + MSISDN from log
+    if (iccidLog.length > 0) {
+      const removed = iccidLog.pop();
+      saveLog();
+      console.log("🗑️ Removed failed entry:", removed);
+    }
+
+    return; // ⛔ STOP here — do NOT proceed further
+  }
+}
+
+// --- CLOSE MODAL (only if not stopped) ---
+async function closeModal(timeout = 8000) {
+  const start = performance.now();
+  let closeBtn = null;
+  while (performance.now() - start < timeout) {
+    closeBtn = [...document.querySelectorAll("button.btn.btn-small.btn-info")]
+      .find(b => b.textContent.trim().toLowerCase() === "close");
+    if (closeBtn) break;
+    await wait(200);
+  }
+  if (closeBtn) {
+    closeBtn.click();
+    console.log("Modal closed.");
+    await wait(500);
+  }
+}
+
+await closeModal();
   await wait(1000);
   await closeModal();
 
