@@ -952,18 +952,27 @@ async function next() {
   await wait(1000);
   
   await clickButton("Checkout");
-  await wait(1500); // Wait a bit longer for modal to fully render
-
-// ---------------------------
-// --- READ POPUP MESSAGE ----
-// ---------------------------
-
-  function readCheckoutMessage() {
-  const span = document.querySelector('.modal-content .modal-body p span');
-  return span ? span.textContent.trim() : null;
+// Wait for checkout modal body WITH content
+let checkoutModalBody = null;
+for (let i = 0; i < 50; i++) { // Max 5s
+  checkoutModalBody = document.querySelector('.modal.show .modal-body'); // Target VISIBLE modal
+  if (checkoutModalBody?.textContent.trim()) break;
+  await wait(100);
 }
 
-console.log("Checkout:", readCheckoutMessage());
+if (checkoutModalBody) {
+  // Fallback chain: span > direct p > any text
+  const msg = 
+    checkoutModalBody.querySelector('span')?.textContent.trim() ||
+    checkoutModalBody.querySelector(':scope > p')?.textContent.trim() ||
+    checkoutModalBody.textContent.trim();
+  console.log("✅ Checkout Message:", msg);
+} else {
+  console.warn("⚠️ Checkout modal not detected");
+}
+
+await wait(1000);
+await closeModal(); // Proceed to close
   
   await wait(1000);
 
@@ -1077,16 +1086,32 @@ async function closeModal(timeout = 8000) {
   selectICCID();
   fillSearchBar();
   clickSearchButton();
-  await clickActivateButton();
+await clickActivateButton();
 
-  // ---------------------------
-// --- READ POPUP MESSAGE ----
-// ---------------------------
-function readActivationMessage() {
-  const p = document.querySelector('.modal-content .modal-body > p');
-  return p ? p.textContent.trim() : null;
+// Wait for activation modal body WITH content
+let activationModalBody = null;
+for (let i = 0; i < 50; i++) {
+  activationModalBody = document.querySelector('.modal.show .modal-body');
+  if (activationModalBody?.textContent.trim()) break;
+  await wait(100);
 }
-console.log("Activation:", readActivationMessage()); 
+
+if (activationModalBody) {
+  // Fallback chain: direct p > any p > raw text
+  const msg = 
+    activationModalBody.querySelector(':scope > p')?.textContent.trim() ||
+    activationModalBody.querySelector('p')?.textContent.trim() ||
+    activationModalBody.textContent.trim();
+  console.log("✅ Activation Message:", msg);
+  
+  // Optional: Auto-close if success detected
+  if (msg.toLowerCase().includes('success') || msg.toLowerCase().includes('activated')) {
+    await wait(1500);
+    await closeModal();
+  }
+} else {
+  console.warn("⚠️ Activation modal not detected");
+}
 
   
 }
