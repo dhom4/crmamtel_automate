@@ -950,27 +950,21 @@ async function next() {
   await clickButton("Next");
   await clickButton("Next");
   await wait(1000);
+  
   await clickButton("Checkout");
-  await wait(1000);
+  await wait(1500); // Wait a bit longer for modal to fully render
 
-  async function closeModal(timeout = 8000) {
-    const start = performance.now();
-    let closeBtn = null;
-    while (performance.now() - start < timeout) {
-      closeBtn = [...document.querySelectorAll("button.btn.btn-small.btn-info")]
-        .find(b => b.textContent.trim().toLowerCase() === "close");
-      if (closeBtn) break;
-      await wait(200);
-    }
-    if (closeBtn) {
-      closeBtn.click();
-      console.log("Modal closed.");
-      await wait(500);
-    }
+// --- READ POPUP MESSAGE ---
+let popupMessage = null;
+const modal = document.querySelector('.modal-content');
+if (modal) {
+  const msgEl = modal.querySelector('.modal-body > p');
+  if (msgEl) {
+    popupMessage = msgEl.textContent.trim();
+    console.log("📌 Popup message:", popupMessage);
   }
+}
 
-  await wait(1000);
-  await closeModal();
 
   function copyToClipboard(value) {
     const text = String(value);
