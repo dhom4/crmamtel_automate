@@ -957,34 +957,13 @@ async function next() {
 // ---------------------------
 // --- READ POPUP MESSAGE ----
 // ---------------------------
-function readActivationMessage() {
-  return document.querySelector('.modal-content .modal-body > p')?.textContent?.trim() || null;
-}
-// const msg = readActivationMessage();
-// console.log(msg); // e.g., "Subscriber Activated" or null
 
-  function isActivationSuccessful() {
-    const msg = document.querySelector('.modal-content .modal-body > p')?.textContent?.trim();
-    return msg === "MCASH Request Error";
-    // return msg && msg.includes("Subscriber Activated");
-  }
-  function isNotActivatied() {
-    const msg = document.querySelector('.modal-content .modal-body > p')?.textContent?.trim();
-    // Return true if message exists AND contains "has been used"
-    return msg && msg.includes("has been used");
-  }
-  
-  if (isActivationSuccessful()) {
-      console.log("✅1 continue! MCASH Request Error");
-    }  else if (isNotActivatied()) {
-      console.alert("🛑1 MSISDN already used:", gloable_msisdn);
-      // 🧹 Remove last ICCID + MSISDN from log
-    if (iccidLog.length > 0) {
-        const removed = iccidLog.pop();
-        saveLog();
-        console.log("🗑️ Removed failed entry:", removed);
-      }
-  }
+  function readCheckoutMessage() {
+  const span = document.querySelector('.modal-content .modal-body p span');
+  return span ? span.textContent.trim() : null;
+}
+
+console.log("Checkout:", readCheckoutMessage());
   
   await wait(1000);
 
@@ -1104,27 +1083,10 @@ async function closeModal(timeout = 8000) {
 // --- READ POPUP MESSAGE ----
 // ---------------------------
 function readActivationMessage() {
-  return document.querySelector('.modal-content .modal-body > p')?.textContent?.trim() || null;
+  const p = document.querySelector('.modal-content .modal-body > p');
+  return p ? p.textContent.trim() : null;
 }
-// const msg = readActivationMessage();
-// console.log(msg); // e.g., "Subscriber Activated" or null
-
-  function isActivationSuccessful() {
-    const msg = document.querySelector('.modal-content .modal-body > p')?.textContent?.trim();
-    return msg === "Subscriber Activated";
-    // return msg && msg.includes("Subscriber Activated");
-  }
-  function isNotActivationUsed() {
-    const msg = document.querySelector('.modal-content .modal-body > p')?.textContent?.trim();
-    // Return true if message exists AND contains "has been used"
-    return msg === "Subscriber not found";
-  }
-  
-  if (isActivationSuccessful()) {
-      console.log("✅2 Activation confirmed!");
-  }  else if (isNotActivationUsed()) {
-      console.alert("🛑2 MSISDN already used:", gloable_msisdn);
-  }
+console.log("Activation:", readActivationMessage()); 
 
   
 }
