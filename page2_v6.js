@@ -966,7 +966,9 @@ async function next() {
     if (closeBtn) {
       closeBtn.click();
       console.log("Modal closed.");
-
+      }
+    }
+  
 // --- READ POPUP MESSAGE ---
 let popupMessage = null;
 const modal = document.querySelector('.modal-content');
@@ -1077,3 +1079,4 @@ if (modal) {
   clickSearchButton();
   await clickActivateButton();
 
+}
