@@ -1076,4 +1076,4 @@ if (modal) {
   fillSearchBar();
   clickSearchButton();
   await clickActivateButton();
-}
+
