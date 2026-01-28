@@ -776,8 +776,8 @@ async function addMsisdnSeries() {
     if (rawMsisdn.length < 9) continue;
 
     // ✅ Check if already in your log
-    const isUsed = iccidLog.some(entry => entry.msisdn === rawMsisdn);
-    if (!isUsed) {
+      const isUsed = isMsisdnUsedRecently(rawMsisdn, 2); // last 2 days
+      if (!isUsed) {
       selectedIdx = idx;
       capturedMsisdn = rawMsisdn;
       break; // Use this one!
