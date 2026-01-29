@@ -1218,7 +1218,15 @@ if (activationModalBody) {
     activationModalBody.querySelector(':scope > p')?.textContent.trim() ||
     activationModalBody.querySelector('p')?.textContent.trim() ||
     activationModalBody.textContent.trim();
-  console.log("✅ Activation Message:", msg);
+    console.log("✅ Activation Message:", msg);
+  
+  if (msg.toLowerCase().includes('Subscriber not found') || msg.toLowerCase().includes('not')) {
+    if (iccidLog.length > 0) {
+        const removed = iccidLog.pop();
+        saveLog();
+        console.log("🗑️ Removed failed entry:", removed);
+      }
+  }
   
   // Optional: Auto-close if success detected
   if (msg.toLowerCase().includes('success') || msg.toLowerCase().includes('activated')) {
