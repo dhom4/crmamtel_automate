@@ -952,30 +952,7 @@ async function next() {
   await wait(1000);
   
   await clickButton("Checkout");
-// Wait for checkout modal body WITH content
-let checkoutModalBody = null;
-for (let i = 0; i < 50; i++) { // Max 5s
-  checkoutModalBody = document.querySelector('.modal.show .modal-body'); // Target VISIBLE modal
-  if (checkoutModalBody?.textContent.trim()) break;
-  await wait(100);
-}
-
-if (checkoutModalBody) {
-  // Fallback chain: span > direct p > any text
-  const msg = 
-    checkoutModalBody.querySelector('span')?.textContent.trim() ||
-    checkoutModalBody.querySelector(':scope > p')?.textContent.trim() ||
-    checkoutModalBody.textContent.trim();
-  console.log("✅ Checkout Message:", msg);
-} else {
-  console.warn("⚠️ Checkout modal not detected");
-}
-
-await wait(1000);
-await closeModal(); // Proceed to close
   
-  await wait(1000);
-
   
 async function closeModal(timeout = 8000) {
   const start = performance.now();
@@ -992,8 +969,49 @@ async function closeModal(timeout = 8000) {
     await wait(500);
     }
   }
-  await closeModal();
+  
+// Wait for checkout modal body WITH content
+let checkoutModalBody = null;
+for (let i = 0; i < 50; i++) { // Max 5s
+  checkoutModalBody = document.querySelector('.modal.show .modal-body'); // Target VISIBLE modal
+  if (checkoutModalBody?.textContent.trim()) break;
+  await wait(100);
+}
 
+if (checkoutModalBody) {
+  // Fallback chain: span > direct p > any text
+  const msg = 
+    checkoutModalBody.querySelector('span')?.textContent.trim() ||
+    checkoutModalBody.querySelector(':scope > p')?.textContent.trim() ||
+    checkoutModalBody.textContent.trim();
+    console.log("✅ Checkout Message:", msg);
+    await wait(1500);
+    await closeModal();
+} else {
+  console.warn("⚠️ Checkout modal not detected");
+}
+
+await wait(3000);
+  
+
+console.log("🚀 Starting activation flow...");
+const activationResult = await completeActivationFlow();
+
+if (activationResult?.success) {
+  console.log("✅ FULL PROCESS COMPLETED SUCCESSFULLY");
+  console.log("ICCID:", activationResult.iccid);
+  console.log("MSISDN:", activationResult.msisdn);
+  console.log("Message:", activationResult.message);
+} else {
+  console.warn("⚠️ Activation flow encountered issues");
+}
+// =========================================
+// COMPLETE ACTIVATION FLOW
+// =========================================
+async function completeActivationFlow() {
+  const wait = (ms) => new Promise(res => setTimeout(res, ms));
+
+  // --- 1. COPY ICCID ---
   function copyToClipboard(value) {
     const text = String(value);
     const textarea = document.createElement("textarea");
@@ -1006,96 +1024,194 @@ async function closeModal(timeout = 8000) {
     try {
       document.execCommand("copy");
       console.log("✅ COPIED:", text);
+      return true;
     } catch (err) {
       console.error("❌ Copy failed:", err);
+      return false;
+    } finally {
+      document.body.removeChild(textarea);
     }
-    document.body.removeChild(textarea);
   }
 
-  console.log(gloable_icc_id);
+  console.log("📋 Copying ICCID:", gloable_icc_id);
   copyToClipboard(gloable_icc_id);
 
+  await wait(500);
+
+  // --- 2. NAVIGATE HOME ---
   function clickHomeLogo() {
     const logo = document.querySelector("img.logoImg");
-    if (logo) {
-      logo.click();
-      console.log("Home logo clicked.");
-    } else {
-      console.warn("Home logo not found.");
+    if (!logo) {
+      console.warn("⚠️ Home logo not found.");
+      return false;
     }
+    logo.click();
+    console.log("🏠 Home logo clicked.");
+    return true;
   }
 
+  if (!clickHomeLogo()) return false;
+  await wait(1000);
+
+  // --- 3. SELECT ICCID IN DROPDOWN ---
   function selectICCID() {
     const select = document.querySelector("select#idtype");
     if (!select) {
-      console.warn("Dropdown not found.");
-      return;
+      console.warn("⚠️ Dropdown not found.");
+      return false;
     }
     const option = [...select.options].find(
       opt => opt.textContent.trim().toLowerCase() === "iccid"
     );
     if (!option) {
-      console.warn("ICCID option not found.");
-      return;
+      console.warn("⚠️ ICCID option not found.");
+      return false;
     }
     select.value = option.value;
-    select.dispatchEvent(new Event("change"));
-    console.log("Dropdown changed to ICCID.");
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    console.log("🔽 Dropdown changed to ICCID.");
+    return true;
   }
 
+  if (!selectICCID()) return false;
+  await wait(300);
+
+  // --- 4. FILL SEARCH BAR ---
   function fillSearchBar() {
     const input = document.querySelector("input#number");
     if (!input) {
-      console.warn("Search bar not found.");
-      return;
+      console.warn("⚠️ Search bar not found.");
+      return false;
     }
     input.value = gloable_icc_id;
     input.dispatchEvent(new Event("input", { bubbles: true }));
-    console.log("Search bar filled with:", gloable_icc_id);
+    console.log("🔍 Search bar filled:", gloable_icc_id);
+    return true;
   }
 
+  if (!fillSearchBar()) return false;
+  await wait(300);
+
+  // --- 5. CLICK SEARCH ---
   function clickSearchButton() {
     const searchBtn = [...document.querySelectorAll("button.btn.btn-info")]
       .find(btn => btn.textContent.trim().toLowerCase().includes("search"));
     if (!searchBtn) {
-      console.warn("Search button not found.");
-      return;
+      console.warn("⚠️ Search button not found.");
+      return false;
     }
     searchBtn.click();
-    console.log("Search button clicked.");
+    console.log("🔍 Search button clicked.");
+    return true;
   }
 
+  if (!clickSearchButton()) return false;
+  await wait(1000);
+
+  // --- 6. CLICK ACTIVATE BUTTON ---
   async function clickActivateButton(timeout = 8000) {
     const start = performance.now();
     let activateBtn = null;
+    
     while (performance.now() - start < timeout) {
       activateBtn = [...document.querySelectorAll("span.material-icons.green")]
         .find(el => el.textContent.trim() === "check_circle");
       if (activateBtn) break;
-      await new Promise(res => setTimeout(res, 200));
+      await wait(200);
     }
-   
+    
+    if (!activateBtn) {
+      console.warn("⚠️ Activate button not found within timeout.");
+      return false;
+    }
+    
     activateBtn.click();
-    console.log("Activate button clicked.");
+    console.log("✅ Activate button clicked.");
+    return true;
   }
 
+  if (!(await clickActivateButton())) return false;
+  await wait(1500); // Wait for activation modal
 
+  // --- 7. READ ACTIVATION MESSAGE ---
+  async function readActivationMessage() {
+    let activationModalBody = null;
+    
+    // Wait for modal with content (max 5s)
+    for (let i = 0; i < 50; i++) {
+      activationModalBody = document.querySelector('.modal.show .modal-body');
+      if (activationModalBody?.textContent.trim()) break;
+      await wait(100);
+    }
+    
+    if (!activationModalBody) {
+      console.warn("⚠️ Activation modal not detected");
+      return null;
+    }
+    
+    // Fallback chain: direct p > any p > raw text
+    const message = 
+      activationModalBody.querySelector(':scope > p')?.textContent.trim() ||
+      activationModalBody.querySelector('p')?.textContent.trim() ||
+      activationModalBody.textContent.trim();
+    
+    console.log("📨 Activation Message:", message);
+    return message;
+  }
+
+  const activationMessage = await readActivationMessage();
   
-  await wait(1000);
-  clickHomeLogo();
-  selectICCID();
-  fillSearchBar();
-  clickSearchButton();
-await clickActivateButton();
+  // --- 8. AUTO-CLOSE IF SUCCESS ---
+  async function closeModal(timeout = 8000) {
+    const start = performance.now();
+    let closeBtn = null;
+    
+    while (performance.now() - start < timeout) {
+      closeBtn = [...document.querySelectorAll("button.btn.btn-small.btn-info")]
+        .find(b => b.textContent.trim().toLowerCase() === "close");
+      if (closeBtn) break;
+      await wait(200);
+    }
+    
+    if (closeBtn) {
+      closeBtn.click();
+      console.log("🚪 Modal closed.");
+      await wait(500);
+      return true;
+    }
+    
+    console.warn("⚠️ Close button not found.");
+    return false;
+  }
 
+  // Close modal if activation was successful
+  if (activationMessage && 
+      (activationMessage.toLowerCase().includes('success') || 
+       activationMessage.toLowerCase().includes('activated') ||
+       activationMessage.toLowerCase().includes('completed'))) {
+    console.log("🎉 Activation successful! Closing modal...");
+    await wait(1500);
+    await closeModal();
+  }
+
+  console.log("✨ Activation flow completed.");
+  return {
+    success: true,
+    message: activationMessage,
+    iccid: gloable_icc_id,
+    msisdn: gloable_msisdn
+  };
+}
+
+//
 // Wait for activation modal body WITH content
+//
 let activationModalBody = null;
 for (let i = 0; i < 50; i++) {
   activationModalBody = document.querySelector('.modal.show .modal-body');
   if (activationModalBody?.textContent.trim()) break;
   await wait(100);
 }
-
 if (activationModalBody) {
   // Fallback chain: direct p > any p > raw text
   const msg = 
