@@ -192,9 +192,9 @@ function generateActivationReport(format = 'detailed') {
     filename = `ICCID-Simple-${new Date().toISOString().split('T')[0]}.txt`;
 
   } else if (format === 'csv') {
-    // ✅ MATCH download_log() EXACTLY
-
-    function formatDateDisplay(dateStr) {
+    
+      // Helper: format date as DD/MM/YYYY
+      function formatDateDisplay(dateStr) {
       const d = new Date(dateStr);
       const day = String(d.getDate()).padStart(2, '0');
       const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -207,20 +207,45 @@ function generateActivationReport(format = 'detailed') {
         time: `${hours}:${minutes}:${seconds}`
       };
     }
-
-    const headers = ['Date', 'Time', 'ICCID', 'MSISDN', 'Notes'];
-    const rows = iccidLog.map(e => {
-      const { date, time } = formatDateDisplay(e.timestamp);
-      // ✅ EXACT same format as download_log(): no quotes, no escaping
-      return [
-        date,
-        time,
-        e.iccid,        // 7-digit suffix only
-        e.msisdn,       // clean (no 252)
-        ''              // empty Notes
-      ].join(',');
+  
+    // Group entries by date (DD/MM/YYYY)
+    const dailyGroups = {};
+    iccidLog.forEach(entry => {
+      const { date } = formatDateDisplay(entry.timestamp);
+      if (!dailyGroups[date]) dailyGroups[date] = [];
+      dailyGroups[date].push(entry);
     });
-
+  
+    // Sort dates (newest first)
+    const sortedDates = Object.keys(dailyGroups).sort((a, b) => {
+      const [aD, aM, aY] = a.split('/');
+      const [bD, bM, bY] = b.split('/');
+      return new Date(bY, bM - 1, bD) - new Date(aY, aM - 1, aD);
+    });
+  
+    // Build rows with empty row between days
+    const headers = ['Date', 'Time', 'ICCID', 'MSISDN', 'Notes'];
+    const rows = [];
+  
+    sortedDates.forEach((date, index) => {
+      // Add all entries for this day
+      dailyGroups[date].forEach(entry => {
+        const { date: entryDate, time } = formatDateDisplay(entry.timestamp);
+        rows.push([
+          entryDate,
+          time,
+          entry.iccid,
+          entry.msisdn,
+          '' // empty Notes
+        ].join(','));
+      });
+  
+      // Add empty row after each day EXCEPT the last one
+      if (index < sortedDates.length - 1) {
+        rows.push(''); // empty row
+      }
+    });
+  
     content = [headers.join(','), ...rows].join('\n');
     filename = `ICCID-Export-${new Date().toISOString().split('T')[0]}.csv`;
     type = 'text/csv';
